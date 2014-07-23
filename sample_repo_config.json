@@ -1,0 +1,24 @@
+{ 
+  "proxies": [
+    {
+      "name":  "ch3-opc",
+      "protocol": "http",
+      "host":  "your.proxyhost.com",
+      "port":  "80"
+    }
+  ],
+  "repositories": [
+    {  
+      "name":  "production-releases", 
+      "type":  "swift",
+      "container": "accounts-builds",
+      "storage_url":  "https://storage.us2.oraclecloud.com/v1",
+      "auth_url":  "https://storage.us2.oraclecloud.com/auth/v1.0",
+      "user":  "garvin",
+      "auth_key":  "nope",
+      "auth_method":  "password",
+      "storage_id":  "sorry",
+      "identity_domain": "nicetry"
+    }
+  ]
+}
