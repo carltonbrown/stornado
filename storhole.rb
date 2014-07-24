@@ -22,6 +22,7 @@ end
 class SwiftObjectStore
   def initialize(opts)
       os = opts['os']
+      @name = os['name']
       proxy = opts['proxy']
       if proxy
         @os = OpenStack::Connection.create(
@@ -51,8 +52,16 @@ class SwiftObjectStore
   end
 
   def create_repo(name)
-     puts "Creating container #{name}"
-     return SwiftRepo.new(@os.create_container(name))
+     puts "Creating container #{name} in store #{@name}..."
+     if @os.container_exists?(name)
+       puts "Container #{name} already exists in store #{@name}, nothing to do."
+     else
+       return SwiftRepo.new(@os.create_container(name))
+     end
+  end
+
+  def list_containers
+     @os.containers
   end
 end
 
@@ -123,27 +132,43 @@ class RepoConfig
     @ostores = config['object-stores']
   end
 
-  def get(rname, pname, create_if_missing) 
+  def set_proxy(name)
+      puts "Using proxy #{name}" if name
+      if name
+        @proxy = @proxies.select do |name|
+          proxy['name'] == name
+        end[0] || {}
+      else 
+        @proxy = {}
+      end
+  end
+
+  def get(rname)
       rconfig = @repositories.select do |repo|
         repo['name'] == rname
       end[0]
-      pconfig = @proxies.select do |proxy|
-        proxy['name'] == pname
-      end[0] || {}
       osconfig = @ostores.select do |ostore|
          ostore['name'] == rconfig['object-store']
       end[0]
 
-      os = SwiftObjectStore.new({'os' => osconfig, 'proxy' => pconfig})
+      os = SwiftObjectStore.new({'os' => osconfig, 'proxy' => @proxy})
+      return os.get_repo(rconfig['name'])
+  end
 
-      repo = ''
-      if create_if_missing
-        repo = os.create_repo(rconfig['name'])
-      else
-        repo = os.get_repo(rconfig['name'])
-      end
+  def create(sname, cname)
+      osconfig = @ostores.select do |ostore|
+         ostore['name'] == sname
+      end[0]
+      os = SwiftObjectStore.new({'os' => osconfig, 'proxy' => @proxy})
+      repo = os.create_repo(cname)
+  end
 
-      return repo
+  def ls(sname)
+      osconfig = @ostores.select do |ostore|
+         ostore['name'] == sname
+      end[0]
+      os = SwiftObjectStore.new({'os' => osconfig, 'proxy' => @proxy})
+      os.list_containers
   end
 end
 
@@ -164,6 +189,7 @@ end.parse!
 
 puts "Load config from #{options[:repo_config]}"
 config = RepoConfig.new(options[:repo_config])
+config.set_proxy(options[:proxy_name])
 
 fname = 'accounts-dfcee01869debc8367c104e46219ee612856b299.tgz' # A 200+ MB tarfile
 #fname = 'accounts-22311d8f0ef6d359190ced9ee3ab130bc2236f7d.tgz' # An 800 KB tarfile
@@ -172,7 +198,7 @@ fname = 'accounts-dfcee01869debc8367c104e46219ee612856b299.tgz' # A 200+ MB tarf
 # Example:  ruby storhole.rb repo ls production-releases accounts-22311d8f0ef6d359190ced9ee3ab130bc2236f7d.tgz -r repo_config.json -p ch3-opc
 # Example:  ruby storhole.rb repo ls_l production-releases accounts-22311d8f0ef6d359190ced9ee3ab130bc2236f7d.tgz -r repo_config.json -p ch3-opc
 
-main_commands = ['repo']
+main_commands = ['repo', 'store']
 main_cmd = ARGV.shift
 raise "Command #{main_cmd} not recognized" if ! main_commands.include?(main_cmd)
 
@@ -180,13 +206,19 @@ if main_cmd == 'repo'
   subcommand = ARGV.shift
   rname = ARGV.shift
   puts "Configuring repository #{rname}"
-  puts "Using proxy #{options[:proxy_name]}" if options[:proxy_name]
-  output = ""
-  subcommand == 'create' ? create_if_missing = true : create_if_missing = false
-  repo = config.get(rname, options[:proxy_name], create_if_missing)
+  output = ''
+  repo = config.get(rname, options[:proxy_name])
   subcommand == 'get' && repo.send('get', {:src => ARGV[0], :dst => ARGV[1]})
   subcommand == 'put' && repo.send('put', {:src => ARGV[0], :dst => ARGV[1]})
   subcommand == 'ls' && output = repo.send('list', ARGV[0])
   subcommand == 'ls_l' && output = repo.send('list_detailed', ARGV[0])
+  puts output
+elsif main_cmd == 'store'
+  subcommand = ARGV.shift
+  sname = ARGV.shift
+  cname = ARGV.shift
+  output = ''
+  subcommand == 'create' && config.create(sname, cname)
+  subcommand == 'list' && output = config.ls(sname)
   puts output
 end
