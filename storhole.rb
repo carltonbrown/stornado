@@ -19,39 +19,46 @@ class SwiftObject
   end
 end
 
-class SwiftRepo
+class SwiftObjectStore
   def initialize(opts)
-      raise "No repository specified" unless opts['repo']
-      repo = opts['repo']
+      os = opts['os']
       proxy = opts['proxy']
-      @name = repo['name']
       if proxy
         @os = OpenStack::Connection.create(
           :proxy_host => proxy['host'],
           :proxy_port => proxy['port'],
-          :username => "#{repo['storage_id']}-#{repo['identity_domain']}:#{repo['user']}",
-          :api_key => repo['auth_key'],   # either password or api key.   This is not the auth token
-          :auth_url => repo['auth_url'], 
+          :username => "#{os['storage_id']}-#{os['identity_domain']}:#{os['user']}",
+          :api_key => os['auth_key'],   # either password or api key.   This is not the auth token
+          :auth_url => os['auth_url'], 
           :service_type => "object-store",
-          :auth_method => repo['auth_method'],
+          :auth_method => os['auth_method'],
           :is_debug => false
         )
      else
         @os = OpenStack::Connection.create(
-          :username => "#{repo['storage_id']}-#{repo['identity_domain']}:#{repo['user']}",
-          :api_key => repo['auth_key'],   # either password or api key.   This is not the auth token
-          :auth_url => repo['auth_url'], 
+          :username => "#{os['storage_id']}-#{os['identity_domain']}:#{os['user']}",
+          :api_key => os['auth_key'],   # either password or api key.   This is not the auth token
+          :auth_url => os['auth_url'], 
           :service_type => "object-store",
           :auth_method => repo['auth_method'],
           :is_debug => false
         )
      end
-     if ! @os.container_exists?(repo['container']) && opts['create_if_missing'] == true
-       puts "Creating container #{repo['container']}"
-       @container = @os.create_container(repo['container'])
-     else
-       @container = @os.container(repo['container'])
-     end
+  end
+
+  def get_repo(name)
+     return SwiftRepo.new(@os.container(name))
+  end
+
+  def create_repo(name)
+     puts "Creating container #{name}"
+     return SwiftRepo.new(@os.create_container(name))
+  end
+end
+
+class SwiftRepo
+  def initialize(container)
+     @container = container
      load_index
   end
 
@@ -105,8 +112,6 @@ class SwiftRepo
     opts[:dest] ||= opts[:src]
     puts "Uploading #{opts[:src]} to #{@name} as #{opts[:dest]}"
     new_obj = @container.create_object(opts[:dest], {:metadata=>{"myname"=>"myval"}}, IO.read(opts[:src]))
-    #new_obj = cont.create_object("foo", {:metadata=>{"herpy"=>"derp"}, :content_type=>"text/plain"}, "this is the data")  [can also supply File.open(/path/to/file) and the data]
-
   end
 end
 
@@ -115,30 +120,31 @@ class RepoConfig
     config = JSON.parse(File.read(file))
     @repositories = config['repositories']
     @proxies = config['proxies']
+    @ostores = config['object-stores']
   end
 
-  def get(rname, pname) 
+  def get(rname, pname, create_if_missing) 
       rconfig = @repositories.select do |repo|
         repo['name'] == rname
       end[0]
       pconfig = @proxies.select do |proxy|
         proxy['name'] == pname
       end[0] || {}
-      # Here we could key off repo['type'] to access repos other than Swift.
-      return SwiftRepo.new({'repo' => rconfig, 'proxy' => pconfig})
-  end
-
-  def create(rname, pname) 
-      rconfig = @repositories.select do |repo|
-        repo['name'] == rname
+      osconfig = @ostores.select do |ostore|
+         ostore['name'] == rconfig['object-store']
       end[0]
-      pconfig = @proxies.select do |proxy|
-        proxy['name'] == pname
-      end[0] || {}
-      # Here we could key off repo['type'] to access repos other than Swift.
-      return SwiftRepo.new({'repo' => rconfig, 'proxy' => pconfig, 'create_if_missing' => true})
-  end
 
+      os = SwiftObjectStore.new({'os' => osconfig, 'proxy' => pconfig})
+
+      repo = ''
+      if create_if_missing
+        repo = os.create_repo(rconfig['name'])
+      else
+        repo = os.get_repo(rconfig['name'])
+      end
+
+      return repo
+  end
 end
 
 require 'optparse'
@@ -166,24 +172,21 @@ fname = 'accounts-dfcee01869debc8367c104e46219ee612856b299.tgz' # A 200+ MB tarf
 # Example:  ruby storhole.rb repo ls production-releases accounts-22311d8f0ef6d359190ced9ee3ab130bc2236f7d.tgz -r repo_config.json -p ch3-opc
 # Example:  ruby storhole.rb repo ls_l production-releases accounts-22311d8f0ef6d359190ced9ee3ab130bc2236f7d.tgz -r repo_config.json -p ch3-opc
 
+main_commands = ['repo']
 main_cmd = ARGV.shift
+raise "Command #{main_cmd} not recognized" if ! main_commands.include?(main_cmd)
+
 if main_cmd == 'repo'
   subcommand = ARGV.shift
   rname = ARGV.shift
   puts "Configuring repository #{rname}"
   puts "Using proxy #{options[:proxy_name]}" if options[:proxy_name]
-  repo = ""
   output = ""
-  if subcommand === 'create'
-    repo = config.create(rname, options[:proxy_name])
-  else
-    repo = config.get(rname, options[:proxy_name])
-    subcommand == 'get' && repo.send('get', {:src => ARGV[0], :dst => ARGV[1]})
-    subcommand == 'put' && repo.send('put', {:src => ARGV[0], :dst => ARGV[1]})
-    subcommand == 'ls' && output = repo.send('list', ARGV[0])
-    subcommand == 'ls_l' && output = repo.send('list_detailed', ARGV[0])
-  end
+  subcommand == 'create' ? create_if_missing = true : create_if_missing = false
+  repo = config.get(rname, options[:proxy_name], create_if_missing)
+  subcommand == 'get' && repo.send('get', {:src => ARGV[0], :dst => ARGV[1]})
+  subcommand == 'put' && repo.send('put', {:src => ARGV[0], :dst => ARGV[1]})
+  subcommand == 'ls' && output = repo.send('list', ARGV[0])
+  subcommand == 'ls_l' && output = repo.send('list_detailed', ARGV[0])
   puts output
-else
-  raise "Command #{main_cmd} not recognized"
 end
