@@ -46,7 +46,12 @@ class SwiftRepo
           :is_debug => false
         )
      end
-     @container = @os.container(repo['container'])
+     if ! @os.container_exists?(repo['container']) && opts['create_if_missing'] == true
+       puts "Creating container #{repo['container']}"
+       @container = @os.create_container(repo['container'])
+     else
+       @container = @os.container(repo['container'])
+     end
      load_index
   end
 
@@ -119,9 +124,21 @@ class RepoConfig
       pconfig = @proxies.select do |proxy|
         proxy['name'] == pname
       end[0] || {}
-      # Here we could key off repo['type'] to construct repos other than Swift.
+      # Here we could key off repo['type'] to access repos other than Swift.
       return SwiftRepo.new({'repo' => rconfig, 'proxy' => pconfig})
   end
+
+  def create(rname, pname) 
+      rconfig = @repositories.select do |repo|
+        repo['name'] == rname
+      end[0]
+      pconfig = @proxies.select do |proxy|
+        proxy['name'] == pname
+      end[0] || {}
+      # Here we could key off repo['type'] to access repos other than Swift.
+      return SwiftRepo.new({'repo' => rconfig, 'proxy' => pconfig, 'create_if_missing' => true})
+  end
+
 end
 
 require 'optparse'
@@ -155,11 +172,17 @@ if main_cmd == 'repo'
   rname = ARGV.shift
   puts "Configuring repository #{rname}"
   puts "Using proxy #{options[:proxy_name]}" if options[:proxy_name]
-  repo = config.get(rname, options[:proxy_name])
-  subcommand == 'get' && repo.send('get', {:src => ARGV[0], :dst => ARGV[1]})
-  subcommand == 'put' && repo.send('put', {:src => ARGV[0], :dst => ARGV[1]})
-  subcommand == 'ls' && output = repo.send('list', ARGV[0])
-  subcommand == 'ls_l' && output = repo.send('list_detailed', ARGV[0])
+  repo = ""
+  output = ""
+  if subcommand === 'create'
+    repo = config.create(rname, options[:proxy_name])
+  else
+    repo = config.get(rname, options[:proxy_name])
+    subcommand == 'get' && repo.send('get', {:src => ARGV[0], :dst => ARGV[1]})
+    subcommand == 'put' && repo.send('put', {:src => ARGV[0], :dst => ARGV[1]})
+    subcommand == 'ls' && output = repo.send('list', ARGV[0])
+    subcommand == 'ls_l' && output = repo.send('list_detailed', ARGV[0])
+  end
   puts output
 else
   raise "Command #{main_cmd} not recognized"
