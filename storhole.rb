@@ -13,7 +13,6 @@ class SwiftObject
   end
 
   def to_s
-       "#{@hash}\t#{@content_type}\t#{@bytes}\t#{@last_modified}\t#{@name}"
        sprintf("%32s  %34s  %10d  %26s  %s", @hash, @content_type, @bytes, @last_modified, @name)
   end
 end
