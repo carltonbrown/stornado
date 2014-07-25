@@ -3,22 +3,28 @@
     {
       "name":  "ch3-opc",
       "protocol": "http",
-      "host":  "your.proxyhost.com",
+      "host":  "proxy-hostname",
       "port":  "80"
     }
   ],
-  "repositories": [
+  "object-stores": [
     {  
-      "name":  "production-releases", 
+      "name":  "skunkworks", 
       "type":  "swift",
-      "container": "accounts-builds",
-      "storage_url":  "https://storage.us2.oraclecloud.com/v1",
+      "storage_url":  "https://storage.us2.oraclecloud.com/v1/skunk-works",
       "auth_url":  "https://storage.us2.oraclecloud.com/auth/v1.0",
-      "user":  "garvin",
-      "auth_key":  "nope",
+      "user":  "theuser",
+      "auth_key":  "thepassword",
       "auth_method":  "password",
-      "storage_id":  "sorry",
-      "identity_domain": "nicetry"
+      "identity_domain":  "works",
+      "storage_id": "skunk"
+    }
+  ],
+  "repositories" : [
+    {
+      "name": "",
+      "container": "releases_container",
+      "object-store": "skunkworks"
     }
   ]
 }
