@@ -1,0 +1,23 @@
+#!/usr/bin/env ruby
+require 'storhole'
+
+options = {}
+OptionParser.new do |opts|
+  opts.banner = "Usage: storhole [options]"
+
+  opts.on("-r FILE", "Repo config file") do |f|
+    options[:repo_config] = f
+  end
+
+  opts.on("-p PROXY", "Proxy (as defined in config file)") do |proxy|
+    options[:proxy_name] = proxy
+  end
+end.parse!
+
+config = Configuration.new(options[:repo_config])
+config.set_proxy(options[:proxy_name])
+
+main_menu = ARGV.shift
+
+puts MenuCommands.send(main_menu, config, ARGV).call
+
