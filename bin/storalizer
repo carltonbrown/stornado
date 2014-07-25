@@ -1,9 +1,9 @@
 #!/usr/bin/env ruby
-require 'storhole'
+require 'storalizer'
 
 options = {}
 OptionParser.new do |opts|
-  opts.banner = "Usage: storhole [options]"
+  opts.banner = "Usage: storalizer [options]"
 
   opts.on("-r FILE", "Repo config file") do |f|
     options[:repo_config] = f
