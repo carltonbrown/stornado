@@ -125,9 +125,9 @@ class Configuration
   end
 
   def set_proxy(name)
-      puts "Using proxy #{name}" if name
       if name
-        @proxy = @proxies.select do |name|
+        puts "Using proxy #{name}" if name
+        @proxy = @proxies.select do |proxy|
           proxy['name'] == name
         end[0] || {}
       else 
