@@ -73,6 +73,20 @@ class SwiftService
      return container
   end
 
+  def delete_container(opts)
+     name = opts['container']
+     config = opts['config']
+     retval = false
+     puts "Deleting container #{name} in service #{@name}..."
+     if @os.container_exists?(name)
+       retval = @os.delete_container(name)
+       puts "Container #{name} deleted."
+     else
+       puts "Container #{name} does not exist, nothing to do."
+     end
+     return retval
+  end
+
   def list_containers
      @os.containers
   end
@@ -215,6 +229,10 @@ class ServiceCommands
   def self.create(service, opts)
     Proc.new { service.send('create_container', opts) }
   end
+
+  def self.delete(service, opts)
+    Proc.new { service.send('delete_container', opts) }
+  end
 end
 
 class MenuCommands
@@ -228,7 +246,7 @@ class MenuCommands
 
   def self.service(config, args)
     (service_name, command, cname) = args
-    [ 'create' ].include?(command) && opts = {'container' => cname, 'config' => config }
+    [ 'create', 'delete' ].include?(command) && opts = {'container' => cname, 'config' => config }
     [ 'ls', 'list' ].include?(command) && opts = nil
     ServiceCommands.send(command, config.get_service(service_name), opts)
   end
