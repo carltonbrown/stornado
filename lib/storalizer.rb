@@ -133,6 +133,11 @@ class SwiftContainer
     @container.object(fname).data
   end
 
+  def delete(fname)
+    puts "Deleting object #{fname}"
+    @container.delete_object(fname)
+  end
+
   def get(opts)
     raise "No source file specified" unless opts[:src]
     opts[:dest] ||= opts[:src]
@@ -212,8 +217,12 @@ class RepoCommands
     Proc.new { repo.send('put', opts) }
   end
 
-  def self.get(repo, opts)
-    Proc.new { repo.send('get', opts) }
+  def self.put(repo, opts)
+    Proc.new { repo.send('put', opts) }
+  end
+
+  def self.delete(repo, opts)
+    Proc.new { repo.send('delete', opts[:target]) }
   end
 end
 
@@ -240,6 +249,7 @@ class MenuCommands
     rname = args.shift
     command = args.shift
     [ 'get', 'put' ].include?(command) && opts = {:src => args[0], :dst => args[1]}
+    [ 'delete', 'rm' ].include?(command) && opts = {:target => args[0]}
     [ 'ls', 'list' ].include?(command) && opts = args[0]
     RepoCommands.send(command, config.get_container(rname), opts)
   end
