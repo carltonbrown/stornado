@@ -7,12 +7,21 @@ storalizer
 # Prerequisites:
 gem install openstack
 
+# Arguments:
+* repo - commands to be done against a container (list files, list a particular file, upload a file, download a file, delete a file)
+* service - commands to be done against a service (list containers, create containers, delete containers)
+
 # Usage:
-* ruby storalizer.rb repo get production-releases accounts-22311d8f0ef6d359190ced9ee3ab130bc2236f7d.tgz -r repo_config.json -p ch3-opc
-* ruby storalizer.rb repo put production-releases accounts-22311d8f0ef6d359190ced9ee3ab130bc2236f7d.tgz -r repo_config.json -p ch3-opc
-* ruby storalizer.rb repo ls production-releases accounts-22311d8f0ef6d359190ced9ee3ab130bc2236f7d.tgz -r repo_config.json -p ch3-opc
-* ruby storalizer.rb repo ls_l production-releases accounts-22311d8f0ef6d359190ced9ee3ab130bc2236f7d.tgz -r repo_config.json -p ch3-opc
+* storalizer repo ls big_bucket -r repo_config.json -p ch3-opc
+* storalizer repo put big_bucket accounts-22.tgz -r repo_config.json -p ch3-opc
+* storalizer repo ls big_bucket accounts-22.tgz -r repo_config.json -p ch3-opc
+* storalizer repo get big_bucket accounts-22.tgz -r repo_config.json -p ch3-opc
+* storalizer repo delete big_bucket accounts-22.tgz -r repo_config.json -p ch3-opc
+* storalizer service our-account ls big_bucket -r repo_config.json 
+* storalizer service our-account create big_bucket -r repo_config.json 
+* storalizer service our-account delete big_bucket -r repo_config.json 
 
 # Configuration
-* Refer to  your configuration using the -r flag.   See sample_repo_config.json for an example.
-* In the command line, the names of the repository and proxy are aliases specified you in the repo_config.json file
+* Specify the config file with the -r flag.   See sample_repo_config.json for an example.
+* Specify the proxy to use with the -p flag (refers to a proxy alias specified by you in your config file).
+* The repository and service names are also aliases that you specify in your config file
