@@ -17,45 +17,60 @@ class SwiftObject
   end
 end
 
-class SwiftAccount
+class SwiftService
+  attr_accessor :type, :name
   def initialize(opts)
-      os = opts['account']
+      os = opts['service']
       @name = os['name']
+      @type = os['service_type']
       proxy = opts['proxy']
-      if proxy
+      connection_user = "#{os['storage_id']}-#{os['identity_domain']}:#{os['user']}"
+      if proxy.empty?
         @os = OpenStack::Connection.create(
-          :proxy_host => proxy['host'],
-          :proxy_port => proxy['port'],
-          :username => "#{os['storage_id']}-#{os['identity_domain']}:#{os['user']}",
+          :username => connection_user,
           :api_key => os['auth_key'],   # either password or api key.   This is not the auth token
           :auth_url => os['auth_url'], 
-          :service_type => "object-store",
+          :service_type => @type,
           :auth_method => os['auth_method'],
           :is_debug => false
         )
      else
         @os = OpenStack::Connection.create(
-          :username => "#{os['storage_id']}-#{os['identity_domain']}:#{os['user']}",
+          :username => connection_user,
           :api_key => os['auth_key'],   # either password or api key.   This is not the auth token
           :auth_url => os['auth_url'], 
-          :service_type => "object-store",
-          :auth_method => repo['auth_method'],
+          :service_type => @type,
+          :auth_method => os['auth_method'],
+          :proxy_host => proxy['host'],
+          :proxy_port => proxy['port'],
           :is_debug => false
         )
      end
   end
 
-  def get_container(name)
-     return SwiftContainer.new(@os.container(name))
+  def connection
+    @os
   end
 
-  def create_repo(name)
-     puts "Creating container #{name} in account #{@name}..."
+  def get_container(name)
+     return SwiftContainer.new(name, self)
+  end
+
+  def create_container(opts)
+     name = opts['container']
+     config = opts['config']
+     container = ''
+     puts "Creating container #{name} in service #{@name}..."
      if @os.container_exists?(name)
-       puts "Container #{name} already exists in account #{@name}, nothing to do."
+       puts "Container #{name} already exists in service #{@name}, nothing to do."
      else
-       return SwiftContainer.new(@os.create_container(name))
+       if container = SwiftContainer.new(name, self)
+         config.add_container(container)
+       else
+         raise "Failed to create container #{name}"
+       end
      end
+     return container
   end
 
   def list_containers
@@ -64,8 +79,11 @@ class SwiftAccount
 end
 
 class SwiftContainer
-  def initialize(container)
-     @container = container
+  attr_accessor :name, :service, :container
+  def initialize(name, service)
+     @container = service.connection.create_container(name)
+     @name = name
+     @service = service
      load_index
   end
 
@@ -119,9 +137,11 @@ end
 class Configuration
   def initialize(file)
     config = JSON.parse(File.read(file))
-    @repositories = config['repositories']
+    @file = file
+    @containers = config['containers']
     @proxies = config['proxies']
-    @accounts = config['object-stores']
+    @services = config['services']
+    @proxy = {}
   end
 
   def set_proxy(name)
@@ -130,24 +150,38 @@ class Configuration
         @proxy = @proxies.select do |proxy|
           proxy['name'] == name
         end[0] || {}
-      else 
-        @proxy = {}
       end
   end
 
-  def get_container(rname)
-      rconfig = @repositories.select do |repo|
-        repo['name'] == rname
+  def get_container(cname)
+      container_config = @containers.select do |container|
+        container['name'] == cname
       end[0]
-      os = get_account(rconfig['object-store'])
-      return os.get_container(rconfig['name'])
+      svc = get_service(container_config['service'])
+      return svc.get_container(container_config['name'])
   end
 
-  def get_account(name)
-      osconfig = @accounts.select do |account|
-         account['name'] == name
+  def get_service(name)
+      svcconfig = @services.select do |service|
+         service['name'] == name
       end[0]
-      return SwiftAccount.new({'account' => osconfig, 'proxy' => @proxy})
+      return SwiftService.new({'service' => svcconfig, 'proxy' => @proxy})
+  end
+
+  def data
+    return {
+     'containers' => @containers,
+     'proxies' => @proxies,
+     'services' => @services
+    }
+  end
+
+  def add_container(container)
+     configfile = @file
+     @containers.push({'name' => container.name, 'container' => container.name, 'service' => container.service.name })
+     puts "Updating file #{configfile} with new container"
+     File.open(configfile, 'w') {|f| f.write(JSON.pretty_generate(data)) }
+     return true
   end
 end
 
@@ -169,17 +203,17 @@ class RepoCommands
   end
 end
 
-class AccountCommands
-  def self.list(account, opts)
-    Proc.new { account.send('list_containers') }
+class ServiceCommands
+  def self.list(service, opts)
+    Proc.new { service.send('list_containers') }
   end
 
-  def self.ls(account, opts)
-    self.list(account, opts)
+  def self.ls(service, opts)
+    self.list(service, opts)
   end
 
-  def self.create(account, cname)
-    Proc.new { account.send('create_repo', cname) }
+  def self.create(service, opts)
+    Proc.new { service.send('create_container', opts) }
   end
 end
 
@@ -192,32 +226,10 @@ class MenuCommands
     RepoCommands.send(command, config.get_container(rname), opts)
   end
 
-  def self.account(config, args)
-    (account_name, command, cname) = args
-    [ 'create' ].include?(command) && opts = cname
+  def self.service(config, args)
+    (service_name, command, cname) = args
+    [ 'create' ].include?(command) && opts = {'container' => cname, 'config' => config }
     [ 'ls', 'list' ].include?(command) && opts = nil
-    AccountCommands.send(command, config.get_account(account_name), opts)
+    ServiceCommands.send(command, config.get_service(service_name), opts)
   end
 end
-
-=begin
-options = {}
-OptionParser.new do |opts|
-  opts.banner = "Usage: storalizer [options]"
-
-  opts.on("-r FILE", "Repo config file") do |f|
-    options[:repo_config] = f
-  end
-
-  opts.on("-p PROXY", "Proxy (as defined in config file)") do |proxy|
-    options[:proxy_name] = proxy
-  end
-end.parse!
-
-config = Configuration.new(options[:repo_config])
-config.set_proxy(options[:proxy_name])
-
-main_menu = ARGV.shift
-
-puts MenuCommands.send(main_menu, config, ARGV).call
-=end

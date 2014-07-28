@@ -20,4 +20,3 @@ config.set_proxy(options[:proxy_name])
 main_menu = ARGV.shift
 
 puts MenuCommands.send(main_menu, config, ARGV).call
-
