@@ -213,8 +213,8 @@ class RepoCommands
     self.list(repo, arg)
   end
 
-  def self.put(repo, opts)
-    Proc.new { repo.send('put', opts) }
+  def self.get(repo, opts)
+    Proc.new { repo.send('get', opts) }
   end
 
   def self.put(repo, opts)
@@ -248,7 +248,7 @@ class MenuCommands
   def self.repo(config, args)
     rname = args.shift
     command = args.shift
-    [ 'get', 'put' ].include?(command) && opts = {:src => args[0], :dst => args[1]}
+    [ 'get', 'put', 'upload', 'download' ].include?(command) && opts = {:src => args[0], :dest => args[1]}
     [ 'delete', 'rm' ].include?(command) && opts = {:target => args[0]}
     [ 'ls', 'list' ].include?(command) && opts = args[0]
     RepoCommands.send(command, config.get_container(rname), opts)
