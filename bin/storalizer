@@ -14,6 +14,7 @@ OptionParser.new do |opts|
   end
 end.parse!
 
+options[:repo_config] ||= Dir.home + '/.storalizer/repo-config.json'
 config = Configuration.new(options[:repo_config])
 config.set_proxy(options[:proxy_name])
 

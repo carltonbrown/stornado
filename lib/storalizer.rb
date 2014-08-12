@@ -155,6 +155,7 @@ end
 
 class Configuration
   def initialize(file)
+    puts "Reading config file #{file}"
     config = JSON.parse(File.read(file))
     @file = file
     @containers = config['containers']
