@@ -256,24 +256,31 @@ end
 
 class ConfigCommands
   def self.services(opts)
-    Proc.new { 
+    p = Proc.new { 
       # TODO map this to a string instead of JSON
       opts[:config].send('data')['services'].join("\n")
     }
+    # A bit janky. 
+    puts p.call
+    return p
   end
 
   def self.proxies(opts)
-    Proc.new { 
+    p = Proc.new { 
       # TODO map this to a string instead of JSON
       opts[:config].send('data')['proxies'].join("\n")
     }
+    puts p.call
+    return p
   end
 
   def self.repos(opts)
-    Proc.new { 
+    p = Proc.new { 
       # TODO map this to a string instead of JSON
       opts[:config].send('data')['containers'].join("\n")
     }
+    puts p.call
+    return p
   end
 end
 
