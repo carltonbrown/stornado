@@ -49,7 +49,7 @@ class SwiftService
   end
 
   def to_s
-    sprintf("%s %s %s %s", @name, @os[:username], @type, os[:auth_method])
+    sprintf("%s %s", @name, @type)
   end
 
   def connection
@@ -61,27 +61,27 @@ class SwiftService
   end
 
   def create_container(opts)
-     name = opts['container']
-     config = opts['config']
+     name = opts[:container]
+     config = opts[:config]
      container = ''
      puts "Creating container #{name} in service #{@name}..."
-     if @os.container_exists?(name)
-       puts "Container #{name} already exists in service #{@name}, nothing to do."
-     else
+ #    if @os.container_exists?(name)
+ #      puts "Container \"#{name}\" already exists in service #{@name}, nothing to do."
+ #    else
        if container = SwiftContainer.new(name, self)
          config.add_container(container)
        else
          raise "Failed to create container #{name}"
        end
-     end
+ #    end
      return container
   end
 
   def delete_container(opts)
-     name = opts['container']
-     config = opts['config']
+     name = opts[:container]
+     config = opts[:config]
      retval = false
-     puts "Deleting container #{name} in service #{@name}..."
+     puts "Deleting container #{name} from service #{@name}..."
      if @os.container_exists?(name)
        retval = @os.delete_container(name)
        puts "Container #{name} deleted."
@@ -116,11 +116,12 @@ class SwiftContainer
     @container.container_metadata
   end
 
-  def list(target)
-    list_detailed(target)
+  def list(opts)
+    list_detailed(opts)
   end
 
-  def list_detailed(target)
+  def list_detailed(opts)
+    target = opts[:target]
     lines = []
     if target == nil
       @objects.each do |oname, object|
@@ -137,8 +138,8 @@ class SwiftContainer
     @container.object(fname).data
   end
 
-  def delete(fname)
-    puts "Deleting object #{fname}"
+  def delete(opts)
+    fname = opts[:target]
     @container.delete_object(fname)
   end
 
@@ -159,7 +160,6 @@ end
 
 class Configuration
   def initialize(file)
-    puts "Reading config file #{file}"
     config = JSON.parse(File.read(file))
     @file = file
     @containers = config['containers']
@@ -211,11 +211,14 @@ end
 
 class RepoCommands
   def self.list(opts)
-    Proc.new { opts[:repo].send('list_detailed', opts[:target]) }
+    p = Proc.new { opts[:repo].send('list_detailed', opts) }
+    # A bit janky. 
+    puts p.call
+    return p
   end
 
   def self.ls(opts)
-    self.list(opts[:repo], opts[:target])
+    self.list(opts)
   end
 
   def self.get(opts)
@@ -227,25 +230,27 @@ class RepoCommands
   end
 
   def self.delete(opts)
-    Proc.new { opts[:repo].send('delete', opts[:target]) }
+    Proc.new { opts[:repo].send('delete', opts) }
   end
 end
 
 class ServiceCommands
-  def self.list(service, opts)
-    Proc.new { service.send('list_containers') }
+  def self.list(opts)
+    Proc.new { opts[:service].send('list_containers') }
   end
 
-  def self.ls(service, opts)
-    self.list(service, opts)
+  def self.ls(opts)
+    self.list(opts)
   end
 
   def self.create(opts)
-    Proc.new { service.send('create_container', opts['service']) }
+    raise "Container not specified" unless opts[:container]
+    Proc.new { opts[:service].send('create_container', opts) }
   end
 
   def self.delete(opts)
-    Proc.new { service.send('delete_container', opts['service']) }
+    raise "Container not specified" unless opts[:container]
+    Proc.new { opts[:service].send('delete_container', opts) }
   end
 end
 
@@ -285,8 +290,9 @@ class MenuCommands
 
   def self.service(config, args)
     (service_name, command, cname) = args
-    [ 'create', 'delete' ].include?(command) && opts = {'service' => service_name, 'container' => cname, 'config' => config }
-    [ 'ls', 'list' ].include?(command) && opts = {}
+    service = config.get_service(service_name)
+    [ 'create', 'delete' ].include?(command) && opts = {:service => service, :container => cname, :config => config }
+    [ 'ls', 'list' ].include?(command) && opts = {:service => service}
     ServiceCommands.send(command, opts)
   end
 

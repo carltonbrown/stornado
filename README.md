@@ -12,17 +12,20 @@ gem install openstack
 * service - commands to be done against a service (list containers, create containers, delete containers)
 
 # Usage:
-* stornado repo ls big_bucket -r repo_config.json -p ch3-opc
-* stornado repo put big_bucket accounts-22.tgz -r repo_config.json -p ch3-opc
-* stornado repo ls big_bucket accounts-22.tgz -r repo_config.json -p ch3-opc
-* stornado repo get big_bucket accounts-22.tgz -r repo_config.json -p ch3-opc
-* stornado repo delete big_bucket accounts-22.tgz -r repo_config.json -p ch3-opc
-* stornado service our-account ls big_bucket -r repo_config.json 
-* stornado service our-account create big_bucket -r repo_config.json 
-* stornado service our-account delete big_bucket -r repo_config.json 
+* stornado config services # list configured services
+* stornado config proxies # list configured proxies
+* stornado config repos # list configured repos
+* stornado repo ls big_bucket -p ch3-opc  -r ~/config.json # Example with proxy and config file override
+* stornado repo put big_bucket accounts-22.tgz
+* stornado repo ls big_bucket accounts-22.tgz
+* stornado repo get big_bucket accounts-22.tgz
+* stornado repo delete big_bucket accounts-22.tgz
+* stornado service our-account ls big_bucket
+* stornado service our-account create big_bucket
+* stornado service our-account delete big_bucket 
 
 # Configuration
-* Config file defaults to ~/.storalizer/repo-config.json.  Override the config file path with -r flag.   See sample_repo_config.json for an example.
+* Config file defaults to ~/.stornado/repo-config.json.  Override the config file path with -r flag.   See sample_repo_config.json for an example.
 * Specify the proxy to use with the -p flag (refers to a proxy alias specified by you in your config file).
 * The repository and service names are also aliases that you specify in your config file
 

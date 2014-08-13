@@ -2,11 +2,14 @@
 require 'stornado'
 
 options = {}
+options[:repo_config] = Dir.home + '/.stornado/repo-config.json'
+
 OptionParser.new do |opts|
   opts.banner = "Usage: stornado [options]"
 
   opts.on("-r FILE", "Repo config file") do |f|
     options[:repo_config] = f
+    puts "Using repo config file #{options[:repo_config]}"
   end
 
   opts.on("-p PROXY", "Proxy (as defined in config file)") do |proxy|
@@ -14,10 +17,9 @@ OptionParser.new do |opts|
   end
 end.parse!
 
-options[:repo_config] ||= Dir.home + '/.stornado/repo-config.json'
 config = Configuration.new(options[:repo_config])
 config.set_proxy(options[:proxy_name])
 
 main_menu = ARGV.shift
 
-puts MenuCommands.send(main_menu, config, ARGV).call
+result = MenuCommands.send(main_menu, config, ARGV).call
