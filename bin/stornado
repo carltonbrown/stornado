@@ -1,9 +1,9 @@
 #!/usr/bin/env ruby
-require 'storalizer'
+require 'stornado'
 
 options = {}
 OptionParser.new do |opts|
-  opts.banner = "Usage: storalizer [options]"
+  opts.banner = "Usage: stornado [options]"
 
   opts.on("-r FILE", "Repo config file") do |f|
     options[:repo_config] = f
@@ -14,7 +14,7 @@ OptionParser.new do |opts|
   end
 end.parse!
 
-options[:repo_config] ||= Dir.home + '/.storalizer/repo-config.json'
+options[:repo_config] ||= Dir.home + '/.stornado/repo-config.json'
 config = Configuration.new(options[:repo_config])
 config.set_proxy(options[:proxy_name])
 

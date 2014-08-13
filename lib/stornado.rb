@@ -48,6 +48,10 @@ class SwiftService
      end
   end
 
+  def to_s
+    sprintf("%s %s %s %s", @name, @os[:username], @type, os[:auth_method])
+  end
+
   def connection
     @os
   end
@@ -206,24 +210,24 @@ class Configuration
 end
 
 class RepoCommands
-  def self.list(repo, arg)
-    Proc.new { repo.send('list_detailed', arg) }
+  def self.list(opts)
+    Proc.new { opts[:repo].send('list_detailed', opts[:target]) }
   end
 
-  def self.ls(repo, arg)
-    self.list(repo, arg)
+  def self.ls(opts)
+    self.list(opts[:repo], opts[:target])
   end
 
-  def self.get(repo, opts)
-    Proc.new { repo.send('get', opts) }
+  def self.get(opts)
+    Proc.new { opts[:repo].send('get', opts) }
   end
 
-  def self.put(repo, opts)
-    Proc.new { repo.send('put', opts) }
+  def self.put(opts)
+    Proc.new { opts[:repo].send('put', opts) }
   end
 
-  def self.delete(repo, opts)
-    Proc.new { repo.send('delete', opts[:target]) }
+  def self.delete(opts)
+    Proc.new { opts[:repo].send('delete', opts[:target]) }
   end
 end
 
@@ -236,29 +240,59 @@ class ServiceCommands
     self.list(service, opts)
   end
 
-  def self.create(service, opts)
-    Proc.new { service.send('create_container', opts) }
+  def self.create(opts)
+    Proc.new { service.send('create_container', opts['service']) }
   end
 
-  def self.delete(service, opts)
-    Proc.new { service.send('delete_container', opts) }
+  def self.delete(opts)
+    Proc.new { service.send('delete_container', opts['service']) }
+  end
+end
+
+class ConfigCommands
+  def self.services(opts)
+    Proc.new { 
+      # TODO map this to a string instead of JSON
+      opts[:config].send('data')['services'].join("\n")
+    }
+  end
+
+  def self.proxies(opts)
+    Proc.new { 
+      # TODO map this to a string instead of JSON
+      opts[:config].send('data')['proxies'].join("\n")
+    }
+  end
+
+  def self.repos(opts)
+    Proc.new { 
+      # TODO map this to a string instead of JSON
+      opts[:config].send('data')['containers'].join("\n")
+    }
   end
 end
 
 class MenuCommands
   def self.repo(config, args)
     rname = args.shift
+    repo = config.get_container(rname)
     command = args.shift
-    [ 'get', 'put', 'upload', 'download' ].include?(command) && opts = {:src => args[0], :dest => args[1]}
-    [ 'delete', 'rm' ].include?(command) && opts = {:target => args[0]}
-    [ 'ls', 'list' ].include?(command) && opts = args[0]
-    RepoCommands.send(command, config.get_container(rname), opts)
+    [ 'get', 'put', 'upload', 'download' ].include?(command) && opts = {:repo => repo, :src => args[0], :dest => args[1]}
+    [ 'delete', 'rm' ].include?(command) && opts = {:repo => repo, :target => args[0]}
+    [ 'ls', 'list' ].include?(command) && opts = {:repo => repo, :target => args[0]}
+    RepoCommands.send(command, opts)
   end
 
   def self.service(config, args)
     (service_name, command, cname) = args
-    [ 'create', 'delete' ].include?(command) && opts = {'container' => cname, 'config' => config }
-    [ 'ls', 'list' ].include?(command) && opts = nil
-    ServiceCommands.send(command, config.get_service(service_name), opts)
+    [ 'create', 'delete' ].include?(command) && opts = {'service' => service_name, 'container' => cname, 'config' => config }
+    [ 'ls', 'list' ].include?(command) && opts = {}
+    ServiceCommands.send(command, opts)
+  end
+
+  def self.config(config, args)
+    (element, command) = args
+    [ 'services', 'proxies', 'repos' ].include?(element) && opts = {:config => config}
+    ConfigCommands.send(element, opts)
   end
 end
