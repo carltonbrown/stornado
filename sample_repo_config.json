@@ -18,10 +18,10 @@
     {
       "name": "sodev-machine",
       "service_type": "object-store",
-      "storage_url": "https://storage.us2.oraclecloud.com/v1/srm-sodev",
-      "auth_url": "https://storage.us2.oraclecloud.com/auth/v1.0",
+      "storage_url": "https://storage.us2.stornado.com/v1/srm-sodev",
+      "auth_url": "https://storage.us2.stornado.com/auth/v1.0",
       "user": "storage_acct_user",
-      "auth_key": "st0rage_passw0rd",
+      "auth_key": "your_password",
       "auth_method": "password",
       "identity_domain": "my_identity",
       "storage_id": "my_id"
