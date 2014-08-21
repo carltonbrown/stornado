@@ -1,6 +1,7 @@
 require 'json'
 require 'optparse'
 require 'openstack'
+require 'uri'
 
 class SwiftObject
   def initialize(name, md)
@@ -25,7 +26,7 @@ class SwiftService
       @type = os['service_type']
       proxy = opts['proxy']
       connection_user = "#{os['storage_id']}-#{os['identity_domain']}:#{os['user']}"
-      if proxy.empty?
+      if proxy == nil
         @os = OpenStack::Connection.create(
           :username => connection_user,
           :api_key => os['auth_key'],   # either password or api key.   This is not the auth token
@@ -41,15 +42,15 @@ class SwiftService
           :auth_url => os['auth_url'], 
           :service_type => @type,
           :auth_method => os['auth_method'],
-          :proxy_host => proxy['host'],
-          :proxy_port => proxy['port'],
+          :proxy_host => proxy.host,
+          :proxy_port => proxy.port,
           :is_debug => false
         )
      end
   end
 
   def to_s
-    sprintf("%s %s", @name, @type)
+    sprintf("%s", @name)
   end
 
   def connection
@@ -60,26 +61,11 @@ class SwiftService
      return SwiftContainer.new(name, self)
   end
 
-  def create_container(opts)
-     name = opts[:container]
-     config = opts[:config]
-     container = ''
-     puts "Creating container #{name} in service #{@name}..."
- #    if @os.container_exists?(name)
- #      puts "Container \"#{name}\" already exists in service #{@name}, nothing to do."
- #    else
-       if container = SwiftContainer.new(name, self)
-         config.add_container(container)
-       else
-         raise "Failed to create container #{name}"
-       end
- #    end
-     return container
+  def create_container(name)
+     SwiftContainer.new(name, self)
   end
 
-  def delete_container(opts)
-     name = opts[:container]
-     config = opts[:config]
+  def delete_container(name)
      retval = false
      puts "Deleting container #{name} from service #{@name}..."
      if @os.container_exists?(name)
@@ -89,6 +75,10 @@ class SwiftService
        puts "Container #{name} does not exist, nothing to do."
      end
      return retval
+  end
+
+  def containers
+     @os.containers
   end
 
   def list_containers
@@ -103,6 +93,10 @@ class SwiftContainer
      @name = name
      @service = service
      load_index
+  end
+
+  def to_s
+    self.service.to_s + ':' + self.name.to_s
   end
 
   def load_index
@@ -120,17 +114,29 @@ class SwiftContainer
     list_detailed(opts)
   end
 
+  def files
+    lines = []
+    @objects.each do |oname, object|
+      lines.push(object.to_s)
+    end
+    return lines
+  end
+
   def list_detailed(opts)
     target = opts[:target]
     lines = []
     if target == nil
-      @objects.each do |oname, object|
-        lines.push(object.to_s)
-      end
+      lines = files
     else
       lines.push(@objects[target].to_s)
     end
     return lines.join("\n")
+  end
+
+  def files
+    @objects.map do |oname, object|
+     object.to_s
+    end
   end
 
   def read_file(fname)
@@ -140,6 +146,7 @@ class SwiftContainer
 
   def delete(opts)
     fname = opts[:target]
+    puts "Delete object #{fname}"
     @container.delete_object(fname)
   end
 
@@ -158,52 +165,68 @@ class SwiftContainer
   end
 end
 
-class Configuration
-  def initialize(file)
-    config = JSON.parse(File.read(file))
-    @file = file
-    @containers = config['containers']
-    @proxies = config['proxies']
-    @services = config['services']
-    @proxy = {}
+class Stornado
+  def initialize(opts)
+    opts[:repo_config] ||= Dir.home + '/.stornado/repo-config.json'
+    @file = opts[:repo_config]
+    puts "Initializing with config #{opts[:repo_config]}"
+    @config = JSON.parse(File.read(opts[:repo_config]))
+    (ENV['HTTP_PROXY']) == nil ? @proxy = nil : @proxy = URI(ENV['HTTP_PROXY'])
+    if @proxy
+      puts "Using proxy #{proxy}"
+    end
   end
 
-  def set_proxy(name)
-      if name
-        puts "Using proxy #{name}" if name
-        @proxy = @proxies.select do |proxy|
-          proxy['name'] == name
-        end[0] || {}
-      end
-  end
-
-  def get_container(cname)
-      container_config = @containers.select do |container|
-        container['name'] == cname
+  def get_repo(rname)
+      repo_config = @config['containers'].select do |repo|
+        repo['name'] == rname
       end[0]
-      svc = get_service(container_config['service'])
-      return svc.get_container(container_config['name'])
+      svc = get_service(repo_config['service'])
+      return svc.get_container(repo_config['container'])
   end
 
   def get_service(name)
-      svcconfig = @services.select do |service|
+      svcconfig = @config['services'].select do |service|
          service['name'] == name
       end[0]
       return SwiftService.new({'service' => svcconfig, 'proxy' => @proxy})
   end
 
+  def services
+      @config['services'].map do |service|
+         service['name'] + ":  " + service['user'] 
+      end
+  end
+
+  def repos
+      @config['containers'].map do |repo|
+         repo['service'] + "/" + repo['container'] 
+      end
+  end
+
   def data
     return {
-     'containers' => @containers,
-     'proxies' => @proxies,
-     'services' => @services
+     'containers' => @config['containers'],
+     'services' => @config['services']
     }
+  end
+
+  def create_container(name, service)
+      container = service.create_container(name)
+      raise "Container not created" unless container
+      self.add_container(container)
   end
 
   def add_container(container)
      configfile = @file
-     @containers.push({'name' => container.name, 'container' => container.name, 'service' => container.service.name })
-     puts "Updating file #{configfile} with new container"
+     dups = @config['containers'].select do |repo|
+        repo['name'] == container.name && repo['service'] == container.service.name
+     end
+     if dups.length > 0
+        raise "Container #{container.name} already exists in #{container.service.name}"
+     end
+     puts "Updating file #{configfile} with new container #{container.name}"
+     @config['containers'].push({'name' => container.name, 'container' => container.name, 'service' => container.service.name })
      File.open(configfile, 'w') {|f| f.write(JSON.pretty_generate(data)) }
      return true
   end
@@ -265,15 +288,6 @@ class ConfigCommands
     return p
   end
 
-  def self.proxies(opts)
-    p = Proc.new { 
-      # TODO map this to a string instead of JSON
-      opts[:config].send('data')['proxies'].join("\n")
-    }
-    puts p.call
-    return p
-  end
-
   def self.repos(opts)
     p = Proc.new { 
       # TODO map this to a string instead of JSON
@@ -287,7 +301,7 @@ end
 class MenuCommands
   def self.repo(config, args)
     rname = args.shift
-    repo = config.get_container(rname)
+    repo = config.get_repo(rname)
     command = args.shift
     [ 'get', 'put', 'upload', 'download' ].include?(command) && opts = {:repo => repo, :src => args[0], :dest => args[1]}
     [ 'delete', 'rm' ].include?(command) && opts = {:repo => repo, :target => args[0]}
@@ -301,11 +315,5 @@ class MenuCommands
     [ 'create', 'delete' ].include?(command) && opts = {:service => service, :container => cname, :config => config }
     [ 'ls', 'list' ].include?(command) && opts = {:service => service}
     ServiceCommands.send(command, opts)
-  end
-
-  def self.config(config, args)
-    (element, command) = args
-    [ 'services', 'proxies', 'repos' ].include?(element) && opts = {:config => config}
-    ConfigCommands.send(element, opts)
   end
 end

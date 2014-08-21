@@ -2,24 +2,45 @@
 require 'stornado'
 
 options = {}
-options[:repo_config] = Dir.home + '/.stornado/repo-config.json'
-
 OptionParser.new do |opts|
   opts.banner = "Usage: stornado [options]"
-
   opts.on("-r FILE", "Repo config file") do |f|
     options[:repo_config] = f
-    puts "Using repo config file #{options[:repo_config]}"
-  end
-
-  opts.on("-p PROXY", "Proxy (as defined in config file)") do |proxy|
-    options[:proxy_name] = proxy
   end
 end.parse!
 
-config = Configuration.new(options[:repo_config])
-config.set_proxy(options[:proxy_name])
+stornado = Stornado.new(options)
+
+=begin test
+
+# Config commands
+puts stornado.services # list services
+svc = stornado.get_service('sodev-machine')
+#container = stornado.create_container('arepo', svc)
+puts stornado.repos
+#svc.delete_container('arepo')
+#puts svc.containers
+repo = stornado.get_repo('arepo')
+repo.put({:src => 'foo'})
+repo.get({:src => 'foo', :dest => 'bar'})
+repo.get({:src => 'foo', :dest => 'baz'})
+puts "List repo #{repo}"
+puts repo.list({:target => nil})
+repo.delete({:target => 'foo'})
+puts repo.list({:target => nil})
+=end
+
+=begin other things
+
+# Repo commands
+repo.put('src', 'dest')
+repo.get('filename')
+repo.delete('filename')
+repo.list('filename')
+repo.files
+puts repo.files
+=end
+
 
 main_menu = ARGV.shift
-
-result = MenuCommands.send(main_menu, config, ARGV).call
+result = MenuCommands.send(main_menu, stornado, ARGV).call
