@@ -7,6 +7,11 @@ OptionParser.new do |opts|
   opts.on("-r FILE", "Repo config file") do |f|
     options[:repo_config] = f
   end
+
+  opts.on("-p PROXY", "DEPRECATED") do |p|
+    puts "The -p option is deprecated.  Set the HTTP_PROXY environment variable"
+    options[:proxy] = p
+  end
 end.parse!
 
 stornado = Stornado.new(options)
@@ -40,7 +45,6 @@ repo.list('filename')
 repo.files
 puts repo.files
 =end
-
 
 main_menu = ARGV.shift
 result = MenuCommands.send(main_menu, stornado, ARGV).call

@@ -12,17 +12,16 @@ gem install openstack
 * service - commands to be done against a service (list containers, create containers, delete containers)
 
 # Usage:
-* stornado config services # list configured services
-* stornado config proxies # list configured proxies
-* stornado config repos # list configured repos
+* stornado services # list configured services
+* stornado repos # list configured repos
+* stornado service our-account ls big_bucket
+* stornado service our-account create big_bucket
+* stornado service our-account delete big_bucket 
 * stornado repo ls big_bucket -p ch3-opc  -r ~/config.json # Example with proxy and config file override
 * stornado repo put big_bucket accounts-22.tgz
 * stornado repo ls big_bucket accounts-22.tgz
 * stornado repo get big_bucket accounts-22.tgz
 * stornado repo delete big_bucket accounts-22.tgz
-* stornado service our-account ls big_bucket
-* stornado service our-account create big_bucket
-* stornado service our-account delete big_bucket 
 
 # Configuration
 * Config file defaults to ~/.stornado/repo-config.json.  Override the config file path with -r flag.   See sample_repo_config.json for an example.
@@ -31,3 +30,6 @@ gem install openstack
 
 # Testing
 * To run locally:  ruby -Ilib/ bin/stornado repo srm-rc ls -r prod_machine_repo_config.json
+
+# Changes
+* Now recognizes the HTTP_PROXY variable

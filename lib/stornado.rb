@@ -62,7 +62,7 @@ class SwiftService
   end
 
   def create_container(name)
-     SwiftContainer.new(name, self)
+     container = SwiftContainer.new(name, self)
   end
 
   def delete_container(name)
@@ -171,9 +171,28 @@ class Stornado
     @file = opts[:repo_config]
     puts "Initializing with config #{opts[:repo_config]}"
     @config = JSON.parse(File.read(opts[:repo_config]))
-    (ENV['HTTP_PROXY']) == nil ? @proxy = nil : @proxy = URI(ENV['HTTP_PROXY'])
+    if opts[:proxy]
+       # unpack it from the config
+      proxies = []
+      if @config['proxies']
+        proxies = @config['proxies'].select do |proxy|
+          proxy['name'] == opts[:proxy]
+        end
+      end
+      if proxies.length < 1
+        raise "No proxy named #{opts[:proxy]}"
+      end
+      proxy = proxies.shift
+      puts "Proxy arg is #{proxy}"
+      @proxy = URI::HTTP.build(
+        {:host => proxy['host'], :port => proxy['port'].to_i}
+      )
+    else
+      (ENV['HTTP_PROXY']) == nil ? @proxy = nil : @proxy = URI(ENV['HTTP_PROXY'])
+    end
+
     if @proxy
-      puts "Using proxy #{proxy}"
+      puts "Using proxy #{@proxy}"
     end
   end
 
@@ -259,7 +278,9 @@ end
 
 class ServiceCommands
   def self.list(opts)
-    Proc.new { opts[:service].send('list_containers') }
+    p = Proc.new { opts[:service].send('list_containers').join("\n") }
+    puts p.call
+    return p
   end
 
   def self.ls(opts)
@@ -268,20 +289,19 @@ class ServiceCommands
 
   def self.create(opts)
     raise "Container not specified" unless opts[:container]
-    Proc.new { opts[:service].send('create_container', opts) }
+    Proc.new { opts[:config].send('create_container', opts[:container], opts[:service]) }
   end
 
   def self.delete(opts)
     raise "Container not specified" unless opts[:container]
-    Proc.new { opts[:service].send('delete_container', opts) }
+    Proc.new { opts[:service].send('delete_container', opts[:container]) }
   end
 end
 
 class ConfigCommands
   def self.services(opts)
     p = Proc.new { 
-      # TODO map this to a string instead of JSON
-      opts[:config].send('data')['services'].join("\n")
+      opts[:config].send('services').join("\n")
     }
     # A bit janky. 
     puts p.call
@@ -290,9 +310,9 @@ class ConfigCommands
 
   def self.repos(opts)
     p = Proc.new { 
-      # TODO map this to a string instead of JSON
-      opts[:config].send('data')['containers'].join("\n")
+      opts[:config].send('repos').join("\n")
     }
+    # A bit janky. 
     puts p.call
     return p
   end
@@ -315,5 +335,15 @@ class MenuCommands
     [ 'create', 'delete' ].include?(command) && opts = {:service => service, :container => cname, :config => config }
     [ 'ls', 'list' ].include?(command) && opts = {:service => service}
     ServiceCommands.send(command, opts)
+  end
+
+  def self.services(config, args)
+    opts = {:config => config }
+    ConfigCommands.send('services', opts)
+  end
+
+  def self.repos(config, args)
+    opts = {:config => config }
+    ConfigCommands.send('repos', opts)
   end
 end
