@@ -180,10 +180,9 @@ class Stornado
         end
       end
       if proxies.length < 1
-        raise "No proxy named #{opts[:proxy]}"
+        raise "There's no configured proxy named #{opts[:proxy]}"
       end
       proxy = proxies.shift
-      puts "Proxy arg is #{proxy}"
       @proxy = URI::HTTP.build(
         {:host => proxy['host'], :port => proxy['port'].to_i}
       )
@@ -242,7 +241,7 @@ class Stornado
         repo['name'] == container.name && repo['service'] == container.service.name
      end
      if dups.length > 0
-        raise "Container #{container.name} already exists in #{container.service.name}"
+        warn "Container #{container.name} already exists in #{container.service.name}"
      end
      puts "Updating file #{configfile} with new container #{container.name}"
      @config['containers'].push({'name' => container.name, 'container' => container.name, 'service' => container.service.name })
