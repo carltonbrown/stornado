@@ -216,6 +216,12 @@ class Stornado
       end
   end
 
+  def proxies
+      @config['proxies'].map do |proxy|
+         service['name'] + ":  " + service['host'] + ":  " + service['port'] 
+      end
+  end
+
   def repos
       @config['containers'].map do |repo|
          repo['service'] + "/" + repo['container'] 
@@ -225,7 +231,8 @@ class Stornado
   def data
     return {
      'containers' => @config['containers'],
-     'services' => @config['services']
+     'services' => @config['services'],
+     'proxies' => @config['proxies']
     }
   end
 
