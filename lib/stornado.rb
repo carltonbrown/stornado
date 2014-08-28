@@ -4,6 +4,7 @@ require 'openstack'
 require 'uri'
 
 class SwiftObject
+  attr_accessor :hash
   def initialize(name, md)
        # fields:  bytes, content_type, last_modified, hash
        @name = name
@@ -133,6 +134,11 @@ class SwiftContainer
     return lines.join("\n")
   end
 
+  def hash(opts)
+    target = opts[:target]
+    @objects[target].hash
+  end
+
   def files
     @objects.map do |oname, object|
      object.to_s
@@ -160,8 +166,10 @@ class SwiftContainer
   def put(opts)
     raise "No source file specified" unless opts[:src]
     opts[:dest] ||= opts[:src]
-    puts "Uploading #{opts[:src]} to #{@name} as #{opts[:dest]}"
+    puts "Uploading #{opts[:src]} to #{@name}"
     new_obj = @container.create_object(opts[:dest], {:metadata=>{"myname"=>"myval"}}, IO.read(opts[:src]))
+    puts "Hash of the new object was #{new_obj.object_metadata[:etag]}"
+    return new_obj
   end
 end
 
@@ -266,7 +274,7 @@ class RepoMenu
     @args = args
     @context = context
     rname = @args.shift
-    @repo = @context.get_service(rname)
+    @repo = @context.get_repo(rname)
   end
 
   def callback
@@ -274,28 +282,41 @@ class RepoMenu
   end
 
   def list
-    Proc.new { puts @repo.list({:target => @args.shift}) }
+    Proc.new { @repo.list({:target => @args.shift}) }
+  end
+
+  def hash
+    Proc.new { @repo.hash({:target => @args.shift}) }
   end
 
   alias :ls :list
 
   def download
     (target, dest) = @args.shift(2)
-    Proc.new { @repo.get({:src => target, :dest => dest}) }
+    Proc.new { 
+      dlsize = @repo.get({:src => target, :dest => dest}) 
+      "Downloaded #{dlsize} bytes"
+    }
   end
 
   alias :get :download
 
   def upload
     (target, dest) = @args.shift(2)
-    Proc.new { @repo.put({:src => target, :dest => dest}) }
+    Proc.new { 
+      result = @repo.put({:src => target, :dest => dest}) 
+      puts "Stored as #{@repo.name}/#{result}"
+    }
   end
 
   alias :put :upload
 
   def delete
     target = @args.shift
-    Proc.new { @repo.delete({:target => target}) }
+    Proc.new { 
+      result = @repo.delete({:target => target}) 
+      "deleted=#{result}"
+    }
   end
 
   alias :rm :delete
@@ -319,7 +340,7 @@ class ServiceMenu
   end
 
   def list
-    Proc.new { puts @service.list_containers.join("\n") }
+    Proc.new { @service.list_containers.join("\n") }
   end
 
   alias :ls :list
@@ -355,15 +376,15 @@ class MainMenu
   end
 
   def repos
-    Proc.new { puts @context.send('repos').join("\n") }
+    Proc.new { @context.send('repos').join("\n") }
   end
 
   def proxies
-    Proc.new { puts @context.send('proxies').join("\n") }
+    Proc.new { @context.send('proxies').join("\n") }
   end
 
   def services
-    Proc.new { puts @context.send('services').join("\n") }
+    Proc.new { @context.send('services').join("\n") }
   end
 
   def method_missing(m, *args, &block)  
