@@ -169,7 +169,7 @@ class Stornado
   def initialize(opts)
     opts[:repo_config] ||= Dir.home + '/.stornado/repo-config.json'
     @file = opts[:repo_config]
-    puts "Initializing with config #{opts[:repo_config]}"
+    puts "Initializing with config #{opts[:repo_config]}" if opts[:debug]
     @config = JSON.parse(File.read(opts[:repo_config]))
     if opts[:proxy]
        # unpack it from the config
@@ -218,7 +218,7 @@ class Stornado
 
   def proxies
       @config['proxies'].map do |proxy|
-         service['name'] + ":  " + service['host'] + ":  " + service['port'] 
+         proxy['name'] + ":  " + proxy['host'] + ":" + proxy['port'] 
       end
   end
 
@@ -257,99 +257,120 @@ class Stornado
   end
 end
 
-class RepoCommands
-  def self.list(opts)
-    p = Proc.new { opts[:repo].send('list_detailed', opts) }
-    # A bit janky. 
-    puts p.call
-    return p
+class RepoMenu
+  def initialize(args, context)
+    if args.length < 1
+      puts "You must supply an argument"
+      exit 1
+    end
+    @args = args
+    @context = context
+    rname = @args.shift
+    @repo = @context.get_service(rname)
   end
 
-  def self.ls(opts)
-    self.list(opts)
+  def callback
+    self.send(@args.shift)
   end
 
-  def self.get(opts)
-    Proc.new { opts[:repo].send('get', opts) }
+  def list
+    Proc.new { puts @repo.list({:target => @args.shift}) }
   end
 
-  def self.put(opts)
-    Proc.new { opts[:repo].send('put', opts) }
+  alias :ls :list
+
+  def download
+    (target, dest) = @args.shift(2)
+    Proc.new { @repo.get({:src => target, :dest => dest}) }
   end
 
-  def self.delete(opts)
-    Proc.new { opts[:repo].send('delete', opts) }
+  alias :get :download
+
+  def upload
+    (target, dest) = @args.shift(2)
+    Proc.new { @repo.put({:src => target, :dest => dest}) }
+  end
+
+  alias :put :upload
+
+  def delete
+    target = @args.shift
+    Proc.new { @repo.delete({:target => target}) }
+  end
+
+  alias :rm :delete
+  alias :del :delete
+end
+
+class ServiceMenu
+  def initialize(args, context)
+    if args.length < 1
+      puts "You must supply an argument"
+      exit 1
+    end
+    @args = args
+    @context = context
+    svcname = @args.shift
+    @service = @context.get_service(svcname)
+  end
+
+  def callback
+    self.send(@args.shift)
+  end
+
+  def list
+    Proc.new { puts @service.list_containers.join("\n") }
+  end
+
+  alias :ls :list
+
+  def create
+    name = @args.shift 
+    # TODO it seems like the service should create the container, not the config
+    Proc.new { @context.create_container(name, @service) }
+  end
+
+  def delete
+    name = @args.shift 
+    Proc.new { @service.delete_container(name) } 
   end
 end
 
-class ServiceCommands
-  def self.list(opts)
-    p = Proc.new { opts[:service].send('list_containers').join("\n") }
-    puts p.call
-    return p
+class MainMenu
+  def initialize(args, context)
+    if args.length < 1
+      puts "You must supply an argument"
+      exit 1
+    end
+    @args = args
+    @context = context
   end
 
-  def self.ls(opts)
-    self.list(opts)
+  def repo
+    RepoMenu.new(@args, @context).callback
   end
 
-  def self.create(opts)
-    raise "Container not specified" unless opts[:container]
-    Proc.new { opts[:config].send('create_container', opts[:container], opts[:service]) }
+  def service
+    ServiceMenu.new(@args, @context).callback
   end
 
-  def self.delete(opts)
-    raise "Container not specified" unless opts[:container]
-    Proc.new { opts[:service].send('delete_container', opts[:container]) }
-  end
-end
-
-class ConfigCommands
-  def self.services(opts)
-    p = Proc.new { 
-      opts[:config].send('services').join("\n")
-    }
-    # A bit janky. 
-    puts p.call
-    return p
+  def repos
+    Proc.new { puts @context.send('repos').join("\n") }
   end
 
-  def self.repos(opts)
-    p = Proc.new { 
-      opts[:config].send('repos').join("\n")
-    }
-    # A bit janky. 
-    puts p.call
-    return p
-  end
-end
-
-class MenuCommands
-  def self.repo(config, args)
-    rname = args.shift
-    repo = config.get_repo(rname)
-    command = args.shift
-    [ 'get', 'put', 'upload', 'download' ].include?(command) && opts = {:repo => repo, :src => args[0], :dest => args[1]}
-    [ 'delete', 'rm' ].include?(command) && opts = {:repo => repo, :target => args[0]}
-    [ 'ls', 'list' ].include?(command) && opts = {:repo => repo, :target => args[0]}
-    RepoCommands.send(command, opts)
+  def proxies
+    Proc.new { puts @context.send('proxies').join("\n") }
   end
 
-  def self.service(config, args)
-    (service_name, command, cname) = args
-    service = config.get_service(service_name)
-    [ 'create', 'delete' ].include?(command) && opts = {:service => service, :container => cname, :config => config }
-    [ 'ls', 'list' ].include?(command) && opts = {:service => service}
-    ServiceCommands.send(command, opts)
+  def services
+    Proc.new { puts @context.send('services').join("\n") }
   end
 
-  def self.services(config, args)
-    opts = {:config => config }
-    ConfigCommands.send('services', opts)
+  def method_missing(m, *args, &block)  
+    raise "Invalid argument - #{m}"
   end
 
-  def self.repos(config, args)
-    opts = {:config => config }
-    ConfigCommands.send('repos', opts)
+  def callback
+    self.send(@args.shift)
   end
 end

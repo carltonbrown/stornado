@@ -14,6 +14,7 @@ gem install openstack
 # Usage:
 * stornado services # list configured services
 * stornado repos # list configured repos
+* stornado proxies # list configured proxies
 * stornado service our-account ls big_bucket
 * stornado service our-account create big_bucket
 * stornado service our-account delete big_bucket 

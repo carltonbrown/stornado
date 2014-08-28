@@ -12,9 +12,13 @@ OptionParser.new do |opts|
     puts "The -p option is deprecated.  Set the HTTP_PROXY environment variable"
     options[:proxy] = p
   end
+
+  opts.on("-d", "enable debugging") do |d|
+    options[:debug] = d
+    puts "Debug is #{options[:debug]}"
+  end
 end.parse!
 
 stornado = Stornado.new(options)
 
-main_menu = ARGV.shift
-result = MenuCommands.send(main_menu, stornado, ARGV).call
+MainMenu.new(ARGV, stornado).callback.call
