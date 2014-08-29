@@ -21,4 +21,4 @@ end.parse!
 
 stornado = Stornado.new(options)
 
-MainMenu.new(ARGV, stornado).callback.call
+puts MainMenu.new(ARGV, stornado).callback.call

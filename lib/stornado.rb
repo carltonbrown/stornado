@@ -166,9 +166,15 @@ class SwiftContainer
   def put(opts)
     raise "No source file specified" unless opts[:src]
     opts[:dest] ||= opts[:src]
-    puts "Uploading #{opts[:src]} to #{@name}"
-    new_obj = @container.create_object(opts[:dest], {:metadata=>{"myname"=>"myval"}}, IO.read(opts[:src]))
-    puts "Hash of the new object was #{new_obj.object_metadata[:etag]}"
+    local_md5 = Digest::MD5.hexdigest(File.read(opts[:src]))
+    puts "Uploading #{opts[:src]} as #{@name}/#{opts[:dest]}"
+    puts "Computed local md5 digest #{local_md5}"
+    new_obj = @container.create_object(opts[:dest], {},  IO.read(opts[:src]))
+    remote_md5 = new_obj.object_metadata[:etag]
+    puts "Stored remotely with hash #{remote_md5}"
+    if local_md5 != remote_md5
+      raise "Transfer failed (remote hash #{remote_md5} differs from local hash #{local_md5})."
+    end
     return new_obj
   end
 end
@@ -294,8 +300,10 @@ class RepoMenu
   def download
     (target, dest) = @args.shift(2)
     Proc.new { 
-      dlsize = @repo.get({:src => target, :dest => dest}) 
-      "Downloaded #{dlsize} bytes"
+      start_time = Time.now.to_f
+      size = @repo.get({:src => target, :dest => dest}) 
+      elapsed_time = Time.now.to_f - start_time 
+      printf("Transferred %s bytes in %.3f seconds", size, elapsed_time)
     }
   end
 
@@ -304,8 +312,10 @@ class RepoMenu
   def upload
     (target, dest) = @args.shift(2)
     Proc.new { 
+      start_time = Time.now.to_f
       result = @repo.put({:src => target, :dest => dest}) 
-      puts "Stored as #{@repo.name}/#{result}"
+      elapsed_time = Time.now.to_f - start_time 
+      printf("Transferred %s bytes in %.3f seconds", result.bytes, elapsed_time)
     }
   end
 
