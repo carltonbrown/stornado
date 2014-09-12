@@ -4,6 +4,7 @@ require 'json'
 require 'stornado'
 
 class Request
+  attr_accessor :props
   def initialize(file)
     @props = JSON.parse(IO.read(file))
   end
@@ -27,7 +28,7 @@ class Request
   def verify
     local_md5 = Digest::MD5.hexdigest(File.read(referent))
     if local_md5 != checksum
-      raise "File has been changed since this backup was requested."
+      raise "File has been changed since this backup was requested.  #{referent} was #{checksum}, Now #{local_md5}"
     else
       puts "Checksum OK."
     end
@@ -35,6 +36,10 @@ class Request
 
   def parts
     @props['parts']
+  end
+
+  def repo
+    @props['repo']
   end
 
   def parts_dir
@@ -101,7 +106,7 @@ class DirQueue
   end
 
   def deq(file)
-    puts "Dleteing #{file}"
+    puts "Deleting #{file}"
     File.delete(file) if File.exist?(file)
   end
 
@@ -115,12 +120,9 @@ class DirQueue
   end
 end
 
-class UploadHandler
-  def initialize(dir)
-    @remote_dir = dir
-  end
-
+class DirUploadHandler
   def handle(request)
+    @repo = request.repo
     partq = DirQueue.new(request.parts_dir, /./)
     while part = partq.next
       puts "Uploading #{part}"
@@ -135,20 +137,21 @@ class UploadHandler
 
   def transfer(file)
     puts "Transferring #{file}!"
-    FileUtils.cp(file, @remote_dir)
+    FileUtils.cp(file, @repo)
     return true
   end
 end
 
-class StornadoHandler < UploadHandler
-  def initialize(repo)
-    @repo = repo 
+class StornadoUploader < DirUploadHandler
+  def initialize(opts)
+     @stornado = Stornado.new(opts)
   end
 
   def transfer(path)
+    repo = @stornado.get_repo(@repo)
     dest = File.basename(path)
     puts "DEBUG: transfer #{path} to #{dest}"
-    @repo.put({:src => path, :dest => dest})
+    repo.put({:src => path, :dest => dest})
   end
 
 end
@@ -157,7 +160,7 @@ class SplitHandler
   def initialize(dir)
     @workdir = dir
     # TODO change this for prod
-    @chunk_size = 5 * 1024 * 1024
+    @chunk_size = 1 * 1024 * 1024
     FileUtils::mkdir_p(@workdir)
   end
 
@@ -172,13 +175,6 @@ class SplitHandler
         puts %x[split -b #{@chunk_size} #{path} #{basename}.part_]
         puts %x[openssl md5 * > #{basename}.md5] 
     }
-=begin
-    parts = Dir.entries(destdir).select {|entry|
-      File.file?(destdir + '/' + entry)
-    }.map {|entry|
-      destdir + '/' + entry
-    }
-=end
     request.set_parts_dir(destdir)
   end
 end
@@ -202,12 +198,7 @@ class QueueWorker
   end
 end
 
-#upload_handler = UploadHandler.new('/tmp/backup/remote')
-cname = 'test-postgres-backups'
-stornado = Stornado.new({})
-repo = stornado.get_repo(cname)
-
-upload_handler = StornadoHandler.new(repo)
+upload_handler = StornadoUploader.new({})
 
 split_handler = SplitHandler.new('/tmp/backup/split')
 ready = DirQueue.new('/tmp/backup/ready', Regexp.new('\.msg.json'))
