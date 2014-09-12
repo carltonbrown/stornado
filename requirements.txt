@@ -1,0 +1,18 @@
+# PrepWorker
+# It has a handle to the ready queue, processing queue, and parent upload dir
+# PROCESSING DIR IS DISTINCT FROM UPLOAD DIR
+# It asks the ready queue for the next .msg.json
+# When it finds one, it parses into a Request, adding the source file as a field of the Request
+# Then it splits the file into the upload dir.   
+# It also writes the Request itself into the parent_upload/$backname dir
+# Immediately following, it scans upload dir and adds those paths to the Request
+# Then it dequeues the Request from ready queue and places it in the processing queue
+DONE
+
+# TransferWorker
+# It has a handle to the processing queue and the done queue
+# It asks the processor queue for the next msg.json
+# For each part, it checks if the part is on the filesystem. 
+  # If not, it checks the store to ensure it is uploaded.   Otherwise, this is an exception.
+  # Otherwise, it uploads the part, verifies the upload, and deletes the part
+# When all parts are uploaded, it dequeues message from processing and places it in 'done' with a status
