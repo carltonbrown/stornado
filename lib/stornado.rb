@@ -213,6 +213,9 @@ class Stornado
       repo_config = @config['containers'].select do |repo|
         repo['name'] == rname
       end[0]
+      if repo_config == nil
+         raise "No such configured repo - #{rname}"
+      end
       svc = get_service(repo_config['service'])
       return svc.get_container(repo_config['container'])
   end
