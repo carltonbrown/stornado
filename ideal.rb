@@ -205,7 +205,22 @@ ready = DirQueue.new('/tmp/backup/ready', Regexp.new('\.msg.json'))
 processing = DirQueue.new('/tmp/backup/processing', Regexp.new('\.msg.json'))
 complete = DirQueue.new('/tmp/backup/complete', Regexp.new('\.msg.json'))
 prepper = QueueWorker.new(ready, processing, split_handler)
-prepper.work
-
 shipper = QueueWorker.new(processing, complete, upload_handler)
-shipper.work
+
+ship = Thread.new { 
+  while true
+    prepper.work 
+    sleep 1
+  end
+}
+
+prep = Thread.new { 
+  while true
+    shipper.work 
+    sleep 1
+  end
+}
+
+ship.join
+prep.join
+
