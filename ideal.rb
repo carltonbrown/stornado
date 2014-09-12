@@ -9,10 +9,6 @@ class Request
     @props = JSON.parse(IO.read(file))
   end
 
-  def set_parts(parts)
-    @props['parts'] = parts
-  end
-
   def set_parts_dir(dir)
     @props['parts_dir'] = dir
   end
@@ -27,15 +23,11 @@ class Request
 
   def verify
     local_md5 = Digest::MD5.hexdigest(File.read(referent))
-    if local_md5 != checksum
-      raise "File has been changed since this backup was requested.  #{referent} was #{checksum}, Now #{local_md5}"
+    if local_md5 != @props['checksum']
+      raise "File has been changed since this backup was requested.  #{referent} was #{@props['checksum']}, Now #{local_md5}"
     else
-      puts "Checksum OK."
+      puts "Checksum verified."
     end
-  end
-
-  def parts
-    @props['parts']
   end
 
   def repo
@@ -52,18 +44,6 @@ class Request
 
   def referent
     @props['path']
-  end
-
-  def checksum
-    @props['checksum']
-  end
-
-  def workdir
-    @props['workdir']
-  end
-
-  def container
-    @props['container']
   end
 
   def to_s
@@ -111,7 +91,6 @@ class DirQueue
   end
 
   def files
-    puts "Scanning #{@dir}"
     Dir.entries(@dir).select {|entry|
         File.file?(@dir + '/' + entry)
       }.map {|entry|
@@ -150,7 +129,6 @@ class StornadoUploader < DirUploadHandler
   def transfer(path)
     repo = @stornado.get_repo(@repo)
     dest = File.basename(path)
-    puts "DEBUG: transfer #{path} to #{dest}"
     repo.put({:src => path, :dest => dest})
   end
 
@@ -173,6 +151,7 @@ class SplitHandler
     FileUtils::mkdir_p(destdir)
     Dir.chdir(destdir){
         puts %x[split -b #{@chunk_size} #{path} #{basename}.part_]
+        # TODO make this portable
         puts %x[openssl md5 * > #{basename}.md5] 
     }
     request.set_parts_dir(destdir)
@@ -192,11 +171,11 @@ class QueueWorker
       msg.set_source(file)
       @handler.handle(msg)
       @out.enq(msg)
-      puts msg.to_s
-      sleep 1
     end
   end
 end
+
+# PBJ TIME #
 
 upload_handler = StornadoUploader.new({})
 
@@ -223,4 +202,3 @@ prep = Thread.new {
 
 ship.join
 prep.join
-
