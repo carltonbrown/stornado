@@ -1,6 +1,7 @@
 require 'digest/md5'
 require 'fileutils'
 require 'json'
+require 'stornado'
 
 class Request
   attr_accessor :props
