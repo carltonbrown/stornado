@@ -9,7 +9,7 @@ Gem::Specification.new do |s|
   s.summary     = 'stornado - a swift client'
   s.authors     = 'Carlton Brown'
   s.version     = version
-  s.executables << 'stornado'
-  s.files       = ["lib/stornado.rb"]
+  s.executables << 'stornado', 'baknado'
+  s.files       = ["lib/stornado.rb", "lib/baknado.rb"]
   s.add_runtime_dependency 'openstack'
 end

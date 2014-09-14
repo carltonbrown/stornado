@@ -1,2 +1,2 @@
 bash setup.sh
-ruby -Ilib ideal.rb
+ruby -Ilib bin/baknado
