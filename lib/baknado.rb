@@ -152,7 +152,7 @@ class SplitHandler
     Dir.chdir(destdir){
         puts %x[split -b #{@chunk_size} #{path} #{basename}.part_]
         # TODO make this portable
-        puts %x[openssl md5 * > #{basename}.md5] 
+        puts %x[md5sum * > #{basename}.md5] 
     }
     request.set_parts_dir(destdir)
   end
