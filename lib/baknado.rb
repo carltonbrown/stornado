@@ -81,7 +81,12 @@ class DirQueue
     end
   end
 
-  alias :next :first
+  def next
+      if file = first
+        Syslog.log(Syslog::LOG_INFO, "[#{name}] saw #{file}")
+      end
+      file
+  end
 
   def name
     @name
@@ -105,7 +110,7 @@ class DirQueue
      newpath = @dir + "/" + File.basename(msg.source)
      msg.set_source(newpath)
      msg.save
-     Syslog.log(Syslog::LOG_INFO, "#{msg.source} to #{@dir}")
+     Syslog.log(Syslog::LOG_INFO, "[#{name}] queued #{msg.source}")
   end
 
   def deq(msg)
@@ -208,11 +213,9 @@ class QueueWorker
   def work
     while file = @in.next
       msg = Request.new(file)
-      
       begin
         @handler.handle(msg)
         @out.enq(msg)
-        Syslog.log(Syslog::LOG_ERR, "[#{@out.name}] #{File.basename(msg.source)}")
         @in.deq(msg)
       rescue Exception => e
         Syslog.log(Syslog::LOG_ERR, "Failed to process request message #{e.backtrace}")
