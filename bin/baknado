@@ -8,6 +8,12 @@ Syslog.log(Syslog::LOG_INFO, "starting baknado")
 
 working_dir = ENV['BAKNADO_DIR'] || '/tmp/backup'
 
+if ! Dir.exist?(working_dir)
+   Dir.mkdir(working_dir)
+   Syslog.log(Syslog::LOG_INFO, "creating working directory #{working_dir}")
+end
+
+
 splitq = DirQueue.new("#{working_dir}/split", Regexp.new('\w'), 'split')
 upload_handler = StornadoUploadHandler.new({}, splitq)
 split_handler = SplitHandler.new(splitq)
