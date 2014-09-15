@@ -1,8 +1,8 @@
-rm -rf /tmp/backup/*
-mkdir -p /tmp/backup/ready
-mkdir -p /tmp/backup/remote
-mkdir -p /tmp/backup/raw
+rm -rf ${BAKNADO_DIR}/*
+mkdir -p ${BAKNADO_DIR}/ready
+mkdir -p ${BAKNADO_DIR}/remote
+mkdir -p ${BAKNADO_DIR}/raw
 bash newdump.sh
-mkdir -p /tmp/backup/
-mkdir -p /tmp/backup/processing
-mkdir -p /tmp/backup/complete
+mkdir -p ${BAKNADO_DIR}/
+mkdir -p ${BAKNADO_DIR}/processing
+mkdir -p ${BAKNADO_DIR}/complete

@@ -17,7 +17,7 @@ end
 splitq = DirQueue.new("#{working_dir}/split", Regexp.new('\w'), 'split')
 upload_handler = StornadoUploadHandler.new({}, splitq)
 split_handler = SplitHandler.new(splitq)
-split_handler.chunk_size = 1 * 1024 * 1024
+split_handler.chunk_size = ENV['BAKNADO_CHUNK_SIZE'] || 5 * 1024**3
 ready = DirQueue.new("#{working_dir}/ready", Regexp.new('\.msg.json'), 'ready')
 processing = DirQueue.new("#{working_dir}/processing", Regexp.new('\.msg.json'), 'processing')
 complete = DirQueue.new("#{working_dir}/complete", Regexp.new('\.msg.json'), 'complete')

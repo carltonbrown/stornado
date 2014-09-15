@@ -18,9 +18,12 @@ DONE
 # When all parts are uploaded, it dequeues message from processing and places it in 'done' with a status
 
 #TODO
+* The parts and their md5sum should be put into the message.
+* The split dir should be a directory queue.
+* The message itself should get uploaded.
 * It's got no configging/environment (how does it get its container info, its account info, where to find the space?)
-  * The location of the space - need input from team.  Default to /var/tmp I guess?
-  * The stornado repo is in the message.
+  * The location of the space - should come from an attribute
+  * The stornado repo is contained in the message.
   * The stornado config should be written by what - the backup cookbook?
 * How do we launch it? 
    * Upstart?
