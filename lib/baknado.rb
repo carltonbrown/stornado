@@ -8,6 +8,12 @@ class Request
   attr_accessor :props
   def initialize(file)
     @props = JSON.parse(IO.read(file))
+    @props['parts'] ||= []
+    set_source(file)
+  end
+
+  def parts
+    @props['parts']
   end
 
   def set_parts_dir(dir)
@@ -18,8 +24,18 @@ class Request
     @props['source'] = file
   end
 
-  def write(path)
-    File.open(path, 'w') { |file| file.write(to_s) }
+  def source
+    @props['source']
+  end
+
+  def save
+    Syslog.log(Syslog::LOG_INFO, "saving message to #{source}")
+    File.open(source, 'w+') { |file| file.write(to_s) }
+  end
+
+  def copy(path)
+    Syslog.log(Syslog::LOG_INFO, "copying message from #{source} to #{path}")
+    File.open(path, 'w+') { |file| file.write(to_s) }
   end
 
   def verify
@@ -53,10 +69,12 @@ class Request
 end
 
 class DirQueue
+  attr_accessor :dir
   include Enumerable
-  def initialize(dir, pattern)
+  def initialize(dir, pattern, name)
     @pattern = pattern
     @dir = dir
+    @name = name
     if ! Dir.exist?(@dir)
        Dir.mkdir(@dir)
        Syslog.log(Syslog::LOG_INFO, "creating directory queue #{@dir}")
@@ -64,6 +82,10 @@ class DirQueue
   end
 
   alias :next :first
+
+  def name
+    @name
+  end
 
   def each
      files.each do |file|
@@ -81,14 +103,19 @@ class DirQueue
 
   def enq(msg)
      newpath = @dir + "/" + File.basename(msg.source)
-     Syslog.log(Syslog::LOG_INFO, "moving message #{msg.source} to #{@dir}")
-     msg.write(newpath)
-     File.delete(msg.source)
+     msg.set_source(newpath)
+     msg.save
+     Syslog.log(Syslog::LOG_INFO, "#{msg.source} to #{@dir}")
   end
 
-  def deq(file)
-    Syslog.log(Syslog::LOG_DEBUG, "deleting message #{file}")
-    File.delete(file) if File.exist?(file)
+  def deq(msg)
+    deq_file(msg.source)
+  end
+
+  def deq_file(file)
+    path = @dir + "/" + File.basename(file)
+    Syslog.log(Syslog::LOG_INFO, "delete file #{path}")
+    File.delete(path) if File.exist?(path)
   end
 
   def files
@@ -100,20 +127,22 @@ class DirQueue
   end
 end
 
-class DirUploadHandler
+class DirTransferHandler
+  def initialize(opts, q)
+    @opts = opts
+    @partq = q
+  end
+
   def handle(request)
     @repo = request.repo
-    partq = DirQueue.new(request.parts_dir, /./)
-    while part = partq.next
+    request.parts.each do |part|
+      file = part['filename']
       begin
-        transfer(part)
-        partq.deq(part) 
+        transfer(file)
+       @partq.deq_file(file) 
       rescue
-        Syslog.log(Syslog::LOG_ERR, "transfer of #{part} failed.")
+        Syslog.log(Syslog::LOG_ERR, "transfer of #{file} failed #{e.message}.")
       end
-    end
-    if ! partq.any? 
-      partq.purge
     end
   end
 
@@ -123,8 +152,9 @@ class DirUploadHandler
   end
 end
 
-class StornadoUploader < DirUploadHandler
-  def initialize(opts)
+class StornadoUploadHandler < DirTransferHandler
+  def initialize(opts, q)
+     @partq = q
      @stornado = Stornado.new(opts)
   end
 
@@ -132,34 +162,39 @@ class StornadoUploader < DirUploadHandler
     repo = @stornado.get_repo(@repo)
     dest = File.basename(path)
     Syslog.log(Syslog::LOG_INFO, "uploading #{path} to #{@repo}...")
-    repo.put({:src => path, :dest => dest})
+    if repo.put({:src => path, :dest => dest})
+      Syslog.log(Syslog::LOG_INFO, "uploaded #{path} to #{@repo}...")
+    else
+      raise "failed to upload #{path} to storage service." 
+    end
   end
 
 end
 
 class SplitHandler
   attr_accessor :chunk_size
-  def initialize(dir)
-    @workdir = dir
+  def initialize(outq)
+    @outq = outq
     # Swift limit is 5GB.  
     @chunk_size = 5 * 1024 * 1024 * 1024
-    FileUtils::mkdir_p(@workdir)
   end
 
   def handle(request)
     request.verify
     path = request.referent
     basename = File.basename(path)
-    destdir = @workdir + '/' + basename + '.parts'
-    FileUtils::mkdir_p(destdir)
+    destdir = @outq.dir
     Dir.chdir(destdir){
         Syslog.log(Syslog::LOG_INFO, "splitting #{path} into #{destdir} as #{@chunk_size} byte chunks")
         $stderr.puts %x[split -b #{@chunk_size} #{path} #{basename}.part_]
-        # TODO make this portable
-        Syslog.log(Syslog::LOG_INFO, "writing checksums to #{basename}.md5")
-        $stderr.puts %x[md5sum * > #{basename}.md5] 
+        @outq.each do |file|
+          request.parts << {'filename' => file, 'md5sum' => Digest::MD5.hexdigest(File.read(file)) }
+        end
+        manifest = "#{@outq.dir}/#{basename}.backup.json"
+        request.parts << {'filename' => manifest, 'md5sum' => '' }
+        request.save
+        request.copy(manifest)
     }
-    request.set_parts_dir(destdir)
   end
 end
 
@@ -173,12 +208,14 @@ class QueueWorker
   def work
     while file = @in.next
       msg = Request.new(file)
-      msg.set_source(file)
+      
       begin
         @handler.handle(msg)
         @out.enq(msg)
+        Syslog.log(Syslog::LOG_ERR, "[#{@out.name}] #{File.basename(msg.source)}")
+        @in.deq(msg)
       rescue Exception => e
-        Syslog.log(Syslog::LOG_ERR, "Failed to process request #{msg} - #{e.message}")
+        Syslog.log(Syslog::LOG_ERR, "Failed to process request message #{e.backtrace}")
       end
     end
   end

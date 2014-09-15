@@ -3,18 +3,20 @@ require 'stornado'
 require 'baknado'
 require 'syslog'
 
-upload_handler = StornadoUploader.new({})
+Syslog.open("baknado", Syslog::LOG_PID, Syslog::LOG_DAEMON | Syslog::LOG_LOCAL3)
+Syslog.log(Syslog::LOG_INFO, "starting baknado")
 
-split_handler = SplitHandler.new('/tmp/backup/split')
+
+splitq = DirQueue.new('/tmp/backup/split', Regexp.new('\w'), 'split')
+upload_handler = StornadoUploadHandler.new({}, splitq)
+split_handler = SplitHandler.new(splitq)
 split_handler.chunk_size = 1 * 1024 * 1024
-ready = DirQueue.new('/tmp/backup/ready', Regexp.new('\.msg.json'))
-processing = DirQueue.new('/tmp/backup/processing', Regexp.new('\.msg.json'))
-complete = DirQueue.new('/tmp/backup/complete', Regexp.new('\.msg.json'))
+ready = DirQueue.new('/tmp/backup/ready', Regexp.new('\.msg.json'), 'ready')
+processing = DirQueue.new('/tmp/backup/processing', Regexp.new('\.msg.json'), 'processing')
+complete = DirQueue.new('/tmp/backup/complete', Regexp.new('\.msg.json'), 'complete')
 prepper = QueueWorker.new(ready, processing, split_handler)
 shipper = QueueWorker.new(processing, complete, upload_handler)
 
-Syslog.open("baknado", Syslog::LOG_PID, Syslog::LOG_DAEMON | Syslog::LOG_LOCAL3)
-Syslog.log(Syslog::LOG_INFO, "started baknado")
 
 Signal.trap("TERM") do
   Syslog.log(Syslog::LOG_INFO, "Received TERM, shutting down")
@@ -26,8 +28,9 @@ ship = Thread.new {
   while true
     begin
       shipper.work 
-    rescue
+    rescue Exception => e
       Syslog.log(Syslog::LOG_ERR, "Exception in upload thread.")
+      $stderr.puts e.backtrace
     end
     sleep 1
   end
