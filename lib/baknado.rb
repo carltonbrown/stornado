@@ -27,7 +27,7 @@ class Request
     if local_md5 != @props['checksum']
       raise "File has been changed since this backup was requested.  #{referent} was #{@props['checksum']}, Now #{local_md5}"
     else
-      Syslog.log(Syslog::LOG_INFO, "Verified checksum for #{referent}")
+      Syslog.log(Syslog::LOG_INFO, "verified checksum for #{referent}")
     end
   end
 
@@ -59,7 +59,7 @@ class DirQueue
     @dir = dir
     if ! Dir.exist?(@dir)
        Dir.mkdir(@dir)
-       Syslog.log(Syslog::LOG_INFO, "Creating directory queue #{@dir}")
+       Syslog.log(Syslog::LOG_INFO, "creating directory queue #{@dir}")
     end
   end
 
@@ -81,13 +81,13 @@ class DirQueue
 
   def enq(msg)
      newpath = @dir + "/" + File.basename(msg.source)
-     Syslog.log(Syslog::LOG_INFO, "Moving message #{msg.source} to #{@dir}")
+     Syslog.log(Syslog::LOG_INFO, "moving message #{msg.source} to #{@dir}")
      msg.write(newpath)
      File.delete(msg.source)
   end
 
   def deq(file)
-    Syslog.log(Syslog::LOG_DEBUG, "Deleting message #{file}")
+    Syslog.log(Syslog::LOG_DEBUG, "deleting message #{file}")
     File.delete(file) if File.exist?(file)
   end
 
@@ -109,7 +109,7 @@ class DirUploadHandler
         transfer(part)
         partq.deq(part) 
       rescue
-        Syslog.log(Syslog::LOG_ERR, "Transfer of #{part} failed.")
+        Syslog.log(Syslog::LOG_ERR, "transfer of #{part} failed.")
       end
     end
     if ! partq.any? 
@@ -118,7 +118,7 @@ class DirUploadHandler
   end
 
   def transfer(file)
-    Syslog.log(Syslog::LOG_INFO, "Copying #{file}...")
+    Syslog.log(Syslog::LOG_INFO, "copying #{file}...")
     FileUtils.cp(file, @repo)
   end
 end

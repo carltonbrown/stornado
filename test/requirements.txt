@@ -16,3 +16,27 @@ DONE
   # If not, it checks the store to ensure it is uploaded.   Otherwise, this is an exception.
   # Otherwise, it uploads the part, verifies the upload, and deletes the part
 # When all parts are uploaded, it dequeues message from processing and places it in 'done' with a status
+
+#TODO
+* It's got no configging/environment (how does it get its container info, its account info, where to find the space?)
+  * The location of the space - need input from team.  Default to /var/tmp I guess?
+  * The stornado repo is in the message.
+  * The stornado config should be written by what - the backup cookbook?
+* How do we launch it? 
+   * Upstart?
+* Rethink the storage schema
+* It's got no alerting.  It doesn't status the caller
+  ** Ask Karl what to do.
+
+# DOING
+* cookbook sodev_backup exists but has nothing in it
+* Test failure case
+  * Crash should not kill the whole daemon
+  * It should catch the exception, append status to the message, move message to done.
+
+#  KIND OF DONE
+* It's got logging
+  ** Use the syslog module
+* It's got no sample client
+   * Genmsg is kind of a sample client
+* Baknado now goes in the stornado gem. 
