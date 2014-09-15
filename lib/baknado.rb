@@ -2,6 +2,7 @@ require 'digest/md5'
 require 'fileutils'
 require 'json'
 require 'stornado'
+require 'syslog'
 
 class Request
   attr_accessor :props
@@ -26,7 +27,7 @@ class Request
     if local_md5 != @props['checksum']
       raise "File has been changed since this backup was requested.  #{referent} was #{@props['checksum']}, Now #{local_md5}"
     else
-      puts "Checksum verified."
+      Syslog.log(Syslog::LOG_INFO, "Verified checksum for #{referent}")
     end
   end
 
@@ -57,8 +58,8 @@ class DirQueue
     @pattern = pattern
     @dir = dir
     if ! Dir.exist?(@dir)
-       puts "apparently #{@dir} does not exist"
        Dir.mkdir(@dir)
+       Syslog.log(Syslog::LOG_INFO, "Creating directory queue #{@dir}")
     end
   end
 
@@ -80,13 +81,13 @@ class DirQueue
 
   def enq(msg)
      newpath = @dir + "/" + File.basename(msg.source)
-     puts "Moving message #{msg.source} to #{@dir}"
+     Syslog.log(Syslog::LOG_INFO, "Moving message #{msg.source} to #{@dir}")
      msg.write(newpath)
      File.delete(msg.source)
   end
 
   def deq(file)
-    puts "Deleting #{file}"
+    Syslog.log(Syslog::LOG_DEBUG, "Deleting message #{file}")
     File.delete(file) if File.exist?(file)
   end
 
@@ -104,9 +105,11 @@ class DirUploadHandler
     @repo = request.repo
     partq = DirQueue.new(request.parts_dir, /./)
     while part = partq.next
-      puts "Uploading #{part}"
-      if transfer(part)
+      begin
+        transfer(part)
         partq.deq(part) 
+      rescue
+        Syslog.log(Syslog::LOG_ERR, "Transfer of #{part} failed.")
       end
     end
     if ! partq.any? 
@@ -115,9 +118,8 @@ class DirUploadHandler
   end
 
   def transfer(file)
-    puts "Transferring #{file}!"
+    Syslog.log(Syslog::LOG_INFO, "Copying #{file}...")
     FileUtils.cp(file, @repo)
-    return true
   end
 end
 
@@ -129,16 +131,18 @@ class StornadoUploader < DirUploadHandler
   def transfer(path)
     repo = @stornado.get_repo(@repo)
     dest = File.basename(path)
+    Syslog.log(Syslog::LOG_INFO, "uploading #{path} to #{@repo}...")
     repo.put({:src => path, :dest => dest})
   end
 
 end
 
 class SplitHandler
+  attr_accessor :chunk_size
   def initialize(dir)
     @workdir = dir
-    # TODO change this for prod
-    @chunk_size = 1 * 1024 * 1024
+    # Swift limit is 5GB.  
+    @chunk_size = 5 * 1024 * 1024 * 1024
     FileUtils::mkdir_p(@workdir)
   end
 
@@ -147,12 +151,13 @@ class SplitHandler
     path = request.referent
     basename = File.basename(path)
     destdir = @workdir + '/' + basename + '.parts'
-    puts "splitting #{path} into #{destdir}"
     FileUtils::mkdir_p(destdir)
     Dir.chdir(destdir){
-        puts %x[split -b #{@chunk_size} #{path} #{basename}.part_]
+        Syslog.log(Syslog::LOG_INFO, "splitting #{path} into #{destdir} as #{@chunk_size} byte chunks")
+        $stderr.puts %x[split -b #{@chunk_size} #{path} #{basename}.part_]
         # TODO make this portable
-        puts %x[md5sum * > #{basename}.md5] 
+        Syslog.log(Syslog::LOG_INFO, "writing checksums to #{basename}.md5")
+        $stderr.puts %x[md5sum * > #{basename}.md5] 
     }
     request.set_parts_dir(destdir)
   end
@@ -169,8 +174,12 @@ class QueueWorker
     while file = @in.next
       msg = Request.new(file)
       msg.set_source(file)
-      @handler.handle(msg)
-      @out.enq(msg)
+      begin
+        @handler.handle(msg)
+        @out.enq(msg)
+      rescue Exception => e
+        Syslog.log(Syslog::LOG_ERR, "Failed to process request #{msg} - #{e.message}")
+      end
     end
   end
 end
