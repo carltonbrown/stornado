@@ -13,16 +13,33 @@ if ! Dir.exist?(working_dir)
    Syslog.log(Syslog::LOG_INFO, "creating working directory #{working_dir}")
 end
 
+options = {}
+OptionParser.new do |opts|
+  opts.banner = "Usage: stornado [options]"
+  opts.on("-r FILE", "Repo config file") do |f|
+    options[:repo_config] = f
+  end
+
+  opts.on("-p PROXY", "DEPRECATED") do |p|
+    puts "The -p option is deprecated.  Set the HTTP_PROXY environment variable"
+    options[:proxy] = p
+  end
+
+  opts.on("-d", "enable debugging") do |d|
+    options[:debug] = d
+    puts "Debug is #{options[:debug]}"
+  end
+end.parse!
 
 splitq = DirQueue.new("#{working_dir}/split", Regexp.new('\w'), 'split')
-upload_handler = StornadoUploadHandler.new({}, splitq)
+upload_handler = StornadoUploadHandler.new(options, splitq)
 split_handler = SplitHandler.new(splitq)
 split_handler.chunk_size = ENV['BAKNADO_CHUNK_SIZE'] || 5 * 1024**3
 ready = DirQueue.new("#{working_dir}/ready", Regexp.new('\.msg.json'), 'ready')
-processing = DirQueue.new("#{working_dir}/processing", Regexp.new('\.msg.json'), 'processing')
+transfer = DirQueue.new("#{working_dir}/transfer", Regexp.new('\.msg.json'), 'transfer')
 complete = DirQueue.new("#{working_dir}/complete", Regexp.new('\.msg.json'), 'complete')
-prepper = QueueWorker.new(ready, processing, split_handler)
-shipper = QueueWorker.new(processing, complete, upload_handler)
+prepper = QueueWorker.new(ready, transfer, split_handler)
+shipper = QueueWorker.new(transfer, complete, upload_handler)
 
 Signal.trap("TERM") do
   Syslog.log(Syslog::LOG_INFO, "Received TERM, shutting down")
