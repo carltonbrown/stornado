@@ -146,8 +146,9 @@ class DirTransferHandler
         transfer(file)
        @partq.deq_file(file) 
       rescue
-        Syslog.log(Syslog::LOG_ERR, "transfer of #{file} failed #{e.message}.")
+        Syslog.log(Syslog::LOG_ERR, "handler failed to process request - #{e.backtrace}.")
       end
+      sleep 1
     end
   end
 
@@ -167,13 +168,16 @@ class StornadoUploadHandler < DirTransferHandler
     repo = @stornado.get_repo(@repo)
     dest = File.basename(path)
     Syslog.log(Syslog::LOG_INFO, "uploading #{path} to #{@repo}...")
-    if repo.put({:src => path, :dest => dest})
-      Syslog.log(Syslog::LOG_INFO, "uploaded #{path} to #{@repo}...")
-    else
-      raise "failed to upload #{path} to storage service." 
+    begin
+      if repo.put({:src => path, :dest => dest})
+        Syslog.log(Syslog::LOG_INFO, "uploaded #{path} to #{@repo}...")
+      else
+        raise "failed to upload #{path} to storage service - #{e.message}." 
+      end
+    rescue
+        raise "failed to upload #{path} to storage service - #{e.backtrace}." 
     end
   end
-
 end
 
 class SplitHandler
@@ -218,8 +222,9 @@ class QueueWorker
         @out.enq(msg)
         @in.deq(msg)
       rescue Exception => e
-        Syslog.log(Syslog::LOG_ERR, "Failed to process request message #{e.backtrace}")
+        Syslog.log(Syslog::LOG_ERR, "Worker thread failed to process message - #{e.backtrace}")
       end
+      sleep 1
     end
   end
 end
