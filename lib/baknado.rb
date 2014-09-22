@@ -29,22 +29,22 @@ class Request
   end
 
   def save
-    Syslog.log(Syslog::LOG_INFO, "saving message to #{source}")
+    Syslog.log(Syslog::LOG_WARNING, "saving message to #{source}")
     File.open(source, 'w+') { |file| file.write(to_s) }
   end
 
   def copy(path)
-    Syslog.log(Syslog::LOG_INFO, "copying message from #{source} to #{path}")
+    Syslog.log(Syslog::LOG_WARNING, "copying message from #{source} to #{path}")
     File.open(path, 'w+') { |file| file.write(to_s) }
   end
 
   def verify
     local_md5 = Digest::MD5.hexdigest(File.read(referent))
     if local_md5 != @props['checksum']
-      Syslog.log(Syslog::LOG_INFO, "File has been changed since this backup was requested.  #{referent} was #{@props['checksum']}, Now #{local_md5}")
+      Syslog.log(Syslog::LOG_WARNING, "File has been changed since this backup was requested.  #{referent} was #{@props['checksum']}, Now #{local_md5}")
       raise "File has been changed since this backup was requested.  #{referent} was #{@props['checksum']}, Now #{local_md5}"
     else
-      Syslog.log(Syslog::LOG_INFO, "verified checksum for #{referent}")
+      Syslog.log(Syslog::LOG_WARNING, "verified checksum for #{referent}")
     end
   end
 
@@ -78,13 +78,13 @@ class DirQueue
     @name = name
     if ! Dir.exist?(@dir)
        Dir.mkdir(@dir)
-       Syslog.log(Syslog::LOG_INFO, "creating directory queue #{@dir}")
+       Syslog.log(Syslog::LOG_WARNING, "creating directory queue #{@dir}")
     end
   end
 
   def next
       if file = first
-        Syslog.log(Syslog::LOG_INFO, "[#{name}] saw #{file}")
+        Syslog.log(Syslog::LOG_WARNING, "[#{name}] saw #{file}")
       end
       file
   end
@@ -111,7 +111,7 @@ class DirQueue
      newpath = @dir + "/" + File.basename(msg.source)
      msg.set_source(newpath)
      msg.save
-     Syslog.log(Syslog::LOG_INFO, "[#{name}] queued #{msg.source}")
+     Syslog.log(Syslog::LOG_WARNING, "[#{name}] queued #{msg.source}")
   end
 
   def deq(msg)
@@ -120,7 +120,7 @@ class DirQueue
 
   def deq_file(file)
     path = @dir + "/" + File.basename(file)
-    Syslog.log(Syslog::LOG_INFO, "delete file #{path}")
+    Syslog.log(Syslog::LOG_WARNING, "delete file #{path}")
     File.delete(path) if File.exist?(path)
   end
 
@@ -154,7 +154,7 @@ class DirTransferHandler
   end
 
   def transfer(file)
-    Syslog.log(Syslog::LOG_INFO, "copying #{file}...")
+    Syslog.log(Syslog::LOG_WARNING, "copying #{file}...")
     FileUtils.cp(file, @repo)
   end
 end
@@ -168,10 +168,10 @@ class StornadoUploadHandler < DirTransferHandler
   def transfer(path)
     repo = @stornado.get_repo(@repo)
     dest = File.basename(path)
-    Syslog.log(Syslog::LOG_INFO, "uploading #{path} to #{@repo}...")
+    Syslog.log(Syslog::LOG_WARNING, "uploading #{path} to #{@repo}...")
     begin
       if repo.put({:src => path, :dest => dest})
-        Syslog.log(Syslog::LOG_INFO, "uploaded #{path} to #{@repo}...")
+        Syslog.log(Syslog::LOG_WARNING, "uploaded #{path} to #{@repo}...")
       else
         raise "failed to upload #{path} to storage service - #{e.message}." 
       end
@@ -195,7 +195,7 @@ class SplitHandler
     basename = File.basename(path)
     destdir = @outq.dir
     Dir.chdir(destdir){
-        Syslog.log(Syslog::LOG_INFO, "splitting #{path} into #{destdir} as #{@chunk_size} byte chunks")
+        Syslog.log(Syslog::LOG_WARNING, "splitting #{path} into #{destdir} as #{@chunk_size} byte chunks")
         $stderr.puts %x[split -b #{@chunk_size} #{path} #{basename}.part_]
         @outq.each do |file|
           request.parts << {'filename' => file, 'md5sum' => Digest::MD5.hexdigest(File.read(file)) }
