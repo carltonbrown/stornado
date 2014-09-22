@@ -41,6 +41,7 @@ class Request
   def verify
     local_md5 = Digest::MD5.hexdigest(File.read(referent))
     if local_md5 != @props['checksum']
+      Syslog.log(Syslog::LOG_INFO, "File has been changed since this backup was requested.  #{referent} was #{@props['checksum']}, Now #{local_md5}")
       raise "File has been changed since this backup was requested.  #{referent} was #{@props['checksum']}, Now #{local_md5}"
     else
       Syslog.log(Syslog::LOG_INFO, "verified checksum for #{referent}")
