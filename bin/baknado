@@ -4,14 +4,24 @@ require 'baknado'
 require 'syslog'
 
 Syslog.open("baknado", Syslog::LOG_PID, Syslog::LOG_DAEMON | Syslog::LOG_LOCAL3)
-Syslog.log(Syslog::LOG_WARNING, "starting baknado")
 
 working_dir = ENV['BAKNADO_DIR'] || '/data/baknado'
 
+Syslog.log(Syslog::LOG_ERR, "starting baknado in working dir #{working_dir}")
+
+lockfile = working_dir + '/baknado.lock'
+f = File.open(lockfile, File::RDWR|File::CREAT, 0644)
+if ! f.flock(File::LOCK_NB|File::LOCK_EX)
+  msg = "Failed to lock #{lockfile}"
+  Syslog.log(Syslog::LOG_ERR, msg)
+  raise msg
+end
+
 if ! Dir.exist?(working_dir)
    Dir.mkdir(working_dir)
-   Syslog.log(Syslog::LOG_INFO, "creating working directory #{working_dir}")
+   Syslog.log(Syslog::LOG_ERR, "creating working directory #{working_dir}")
 end
+
 
 options = {}
 OptionParser.new do |opts|
@@ -42,7 +52,7 @@ prepper = QueueWorker.new(ready, transfer, split_handler)
 shipper = QueueWorker.new(transfer, complete, upload_handler)
 
 Signal.trap("TERM") do
-  Syslog.log(Syslog::LOG_INFO, "Received TERM, shutting down")
+  Syslog.log(Syslog::LOG_ERR, "Received TERM, shutting down")
   exit 0
 end
 
@@ -57,7 +67,7 @@ ship = Thread.new {
     sleep 1
   end
 }
-Syslog.log(Syslog::LOG_WARNING, "started upload thread")
+Syslog.log(Syslog::LOG_ERR, "started upload thread")
 
 prep = Thread.new { 
   $stderr.puts "Starting prep watcher."
@@ -70,7 +80,7 @@ prep = Thread.new {
     sleep 1
   end
 }
-Syslog.log(Syslog::LOG_WARNING, "started prep thread")
+Syslog.log(Syslog::LOG_ERR, "started prep thread")
 
 ship.join
 
