@@ -9,7 +9,12 @@ class Request
   def initialize(file)
     @props = JSON.parse(IO.read(file))
     @props['parts'] ||= []
+    @props['failures'] ||= 0
     set_source(file)
+  end
+
+  def failures
+    @props['failures']
   end
 
   def parts
@@ -147,6 +152,7 @@ class DirTransferHandler
         transfer(file)
        @partq.deq_file(file) 
       rescue
+        part['failures'] += 1
         Syslog.log(Syslog::LOG_ERR, "handler failed to process request - #{e.backtrace}.")
       end
       sleep 1
@@ -198,7 +204,7 @@ class SplitHandler
         Syslog.log(Syslog::LOG_WARNING, "splitting #{path} into #{destdir} as #{@chunk_size} byte chunks")
         $stderr.puts %x[split -b #{@chunk_size} #{path} #{basename}.part_]
         @outq.each do |file|
-          request.parts << {'filename' => file, 'md5sum' => Digest::MD5.hexdigest(File.read(file)) }
+          request.parts << {'filename' => file, 'md5sum' => Digest::MD5.hexdigest(File.read(file)), 'failures' => 0 }
         end
         manifest = "#{@outq.dir}/#{basename}.backup.json"
         request.parts << {'filename' => manifest, 'md5sum' => '' }
@@ -209,21 +215,27 @@ class SplitHandler
 end
 
 class QueueWorker
+  attr_accessor :max_retries
   def initialize(inq, outq, handler)
     @in = inq
     @out = outq
     @handler = handler
+    @max_retries = 1
   end
 
   def work
     while file = @in.next
       msg = Request.new(file)
+      if msg.failures > @max_retries
+        raise Syslog.log(Syslog::LOG_ERR, "Message exceeded retry limit of #{@max_retries} - #{e.backtrace}")
+      end 
       begin
         @handler.handle(msg)
         @out.enq(msg)
         @in.deq(msg)
       rescue Exception => e
-        Syslog.log(Syslog::LOG_ERR, "Worker thread failed to process message - #{e.backtrace}")
+        msg.failures += 1
+        Syslog.log(Syslog::LOG_ERR, "Worker method failed to process message - #{e.backtrace}")
       end
       sleep 1
     end
