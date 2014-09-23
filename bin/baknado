@@ -4,7 +4,7 @@ require 'baknado'
 require 'syslog'
 
 Syslog.open("baknado", Syslog::LOG_PID, Syslog::LOG_DAEMON | Syslog::LOG_LOCAL3)
-Syslog.log(Syslog::LOG_INFO, "starting baknado")
+Syslog.log(Syslog::LOG_WARN, "starting baknado")
 
 working_dir = ENV['BAKNADO_DIR'] || '/data/baknado'
 
@@ -52,12 +52,12 @@ ship = Thread.new {
     begin
       shipper.work 
     rescue Exception => e
-      Syslog.log(Syslog::LOG_ERR, "Exception in upload thread.")
-      $stderr.puts e.backtrace
+      Syslog.log(Syslog::LOG_ERR, "exception in upload thread - #{e.backtrace}.")
     end
     sleep 1
   end
 }
+Syslog.log(Syslog::LOG_WARN, "started upload thread")
 
 prep = Thread.new { 
   $stderr.puts "Starting prep watcher."
@@ -65,12 +65,12 @@ prep = Thread.new {
     begin
       prepper.work 
     rescue Exception => e
-      Syslog.log(Syslog::LOG_ERR, "Exception in prep thread.")
-      $stderr.puts e.backtrace
+      Syslog.log(Syslog::LOG_ERR, "exception in prep thread - #{e.backtrace}.")
     end
     sleep 1
   end
 }
+  Syslog.log(Syslog::LOG_WARN, "starting prep thread")
 
 ship.join
 
