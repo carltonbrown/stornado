@@ -166,7 +166,7 @@ class SwiftContainer
   def put(opts)
     raise "No source file specified" unless opts[:src]
     opts[:dest] ||= opts[:src]
-    local_md5 = Digest::MD5.hexdigest(File.read(opts[:src]))
+    local_md5 = Digest::MD5.hexdigest(IO.binread(opts[:src]))
     puts "Uploading #{opts[:src]} as #{@name}/#{opts[:dest]}"
     puts "Computed local md5 digest #{local_md5}"
     new_obj = @container.create_object(opts[:dest], {},  IO.read(opts[:src]))
