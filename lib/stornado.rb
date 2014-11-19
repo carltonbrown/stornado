@@ -166,10 +166,11 @@ class SwiftContainer
   def put(opts)
     raise "No source file specified" unless opts[:src]
     opts[:dest] ||= opts[:src]
-    local_md5 = Digest::MD5.hexdigest(IO.binread(opts[:src]))
+    payload=IO.binread(opts[:src])
+    local_md5 = Digest::MD5.hexdigest(payload)
     puts "Uploading #{opts[:src]} as #{@name}/#{opts[:dest]}"
     puts "Computed local md5 digest #{local_md5}"
-    new_obj = @container.create_object(opts[:dest], {},  IO.read(opts[:src]))
+    new_obj = @container.create_object(opts[:dest], {}, payload)
     remote_md5 = new_obj.object_metadata[:etag]
     puts "Stored remotely with hash #{remote_md5}"
     if local_md5 != remote_md5
