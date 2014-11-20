@@ -265,13 +265,16 @@ class Stornado
      dups = @config['containers'].select do |repo|
         repo['name'] == container.name && repo['service'] == container.service.name
      end
+     retval=false
      if dups.length > 0
         warn "Container #{container.name} already exists in #{container.service.name}"
+     else
+       puts "Updating file #{configfile} with new container #{container.name}"
+       @config['containers'].push({'name' => container.name, 'container' => container.name, 'service' => container.service.name })
+       File.open(configfile, 'w') {|f| f.write(JSON.pretty_generate(data)) }
+       retval=true
      end
-     puts "Updating file #{configfile} with new container #{container.name}"
-     @config['containers'].push({'name' => container.name, 'container' => container.name, 'service' => container.service.name })
-     File.open(configfile, 'w') {|f| f.write(JSON.pretty_generate(data)) }
-     return true
+     return retval
   end
 end
 
