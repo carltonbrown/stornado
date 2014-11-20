@@ -166,7 +166,9 @@ class SwiftContainer
   def put(opts)
     raise "No source file specified" unless opts[:src]
     opts[:dest] ||= opts[:src]
+    puts "Reading #{opts[:src]}"
     payload=IO.binread(opts[:src])
+    puts "Computing checksum"
     local_md5 = Digest::MD5.hexdigest(payload)
     puts "Uploading #{opts[:src]} as #{@name}/#{opts[:dest]}"
     puts "Computed local md5 digest #{local_md5}"
